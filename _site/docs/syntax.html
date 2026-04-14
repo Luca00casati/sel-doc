@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Syntax — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="syntax">Syntax</h1>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#s-expressions" id="markdown-toc-s-expressions">S-Expressions</a></li>
+  <li><a href="#tokens" id="markdown-toc-tokens">Tokens</a>    <ol>
+      <li><a href="#symbols" id="markdown-toc-symbols">Symbols</a></li>
+      <li><a href="#numbers" id="markdown-toc-numbers">Numbers</a></li>
+      <li><a href="#string-literals" id="markdown-toc-string-literals">String Literals</a></li>
+    </ol>
+  </li>
+  <li><a href="#comments" id="markdown-toc-comments">Comments</a></li>
+  <li><a href="#whitespace" id="markdown-toc-whitespace">Whitespace</a></li>
+  <li><a href="#nil" id="markdown-toc-nil">nil</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="s-expressions">S-Expressions</h2>
+
+<p>sel uses a uniform <strong>S-expression</strong> syntax. Every piece of code is either:</p>
+
+<ul>
+  <li>an <strong>atom</strong> — a number, string literal, or symbol</li>
+  <li>a <strong>list</strong> — zero or more expressions enclosed in <code class="language-plaintext highlighter-rouge">(</code> … <code class="language-plaintext highlighter-rouge">)</code></li>
+</ul>
+
+<p>The first element of a list is the operator (a special form or a function name);
+the remaining elements are the arguments.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>          <span class="c1">; call operator +, two arguments</span>
+<span class="p">(</span><span class="nv">println</span> <span class="s">"hi"</span><span class="p">)</span>   <span class="c1">; call println with one string argument</span>
+<span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">x</span> <span class="mi">0</span><span class="p">)</span> <span class="s">"zero"</span> <span class="s">"nonzero"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="tokens">Tokens</h2>
+
+<h3 id="symbols">Symbols</h3>
+
+<p>Any sequence of non-whitespace, non-parenthesis, non-quote characters that does
+<strong>not</strong> parse as a number is a symbol. Symbols are case-sensitive.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>x  foo  my-var  +  =  &lt;&lt;  some-thing-123
+</code></pre></div></div>
+
+<h3 id="numbers">Numbers</h3>
+
+<p>An optional leading <code class="language-plaintext highlighter-rouge">-</code>, at least one digit, optionally one <code class="language-plaintext highlighter-rouge">.</code> and more digits,
+optionally an exponent <code class="language-plaintext highlighter-rouge">e</code>/<code class="language-plaintext highlighter-rouge">E</code> followed by an optional sign and digits.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="mi">42</span>        <span class="c1">; integer</span>
+<span class="mi">-7</span>        <span class="c1">; negative integer</span>
+<span class="mf">3.14</span>      <span class="c1">; float</span>
+<span class="mf">1.5e10</span>    <span class="c1">; scientific notation</span>
+<span class="mf">-2.0e-3</span>   <span class="c1">; negative float with negative exponent</span>
+</code></pre></div></div>
+
+<p><strong>Integers</strong> that fit in a 64-bit <code class="language-plaintext highlighter-rouge">long</code> are stored as tagged longs (no
+allocation). Integers that overflow are automatically promoted to <strong>bigint</strong>
+(arbitrary precision decimal strings).</p>
+
+<p><strong>Floats</strong> that fit in a <code class="language-plaintext highlighter-rouge">double</code> are stored as tagged doubles. Floats with
+more than 17 significant digits are stored as <strong>bigfloat</strong> decimal strings and
+handled with arbitrary-precision arithmetic.</p>
+
+<h3 id="string-literals">String Literals</h3>
+
+<p>sel has two string delimiters:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Delimiter</th>
+      <th>Encoding</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">'…'</code></td>
+      <td>ASCII only</td>
+      <td>Bytes &gt; 127 are rejected at parse time</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">"…"</code></td>
+      <td>UTF-8</td>
+      <td>Full Unicode; validated at parse time</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Both support the same escape sequences:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Escape</th>
+      <th>Character</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\n</code></td>
+      <td>newline</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\t</code></td>
+      <td>tab</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\r</code></td>
+      <td>carriage return</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\\</code></td>
+      <td>backslash</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\'</code></td>
+      <td>single quote</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\"</code></td>
+      <td>double quote</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\0</code></td>
+      <td>null byte</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">\xNN</code></td>
+      <td>byte with hex value <code class="language-plaintext highlighter-rouge">NN</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="ss">'hello</span><span class="o">'</span>          <span class="c1">; ASCII string</span>
+<span class="s">"Héllo wörld"</span>    <span class="c1">; UTF-8 string</span>
+<span class="s">"line1\nline2"</span>   <span class="c1">; escape sequences work in both</span>
+<span class="ss">'\x41\x42\x43</span><span class="o">'</span>  <span class="c1">; "ABC"</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="comments">Comments</h2>
+
+<p>A semicolon <code class="language-plaintext highlighter-rouge">;</code> begins a <strong>line comment</strong> that runs to the end of the line.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; this is a comment</span>
+<span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>   <span class="c1">; inline comment</span>
+</code></pre></div></div>
+
+<p>There are no block comments.</p>
+
+<hr />
+
+<h2 id="whitespace">Whitespace</h2>
+
+<p>Spaces, tabs, and newlines are all interchangeable whitespace. They separate
+tokens and are otherwise insignificant. Expressions can be broken across lines
+freely.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">result</span>
+  <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">&gt;</span> <span class="nv">x</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="p">(</span><span class="nb">*</span> <span class="nv">x</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="mi">0</span><span class="p">))</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="nil">nil</h2>
+
+<p>The symbol <code class="language-plaintext highlighter-rouge">nil</code> represents the empty list and falsy zero value. It is
+equivalent to <code class="language-plaintext highlighter-rouge">0</code> and compares equal to it.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="no">nil</span>        <span class="c1">; same as 0</span>
+<span class="p">(</span><span class="nb">=</span> <span class="no">nil</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1">; 1 (true)</span>
+</code></pre></div></div>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>

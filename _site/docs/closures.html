@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Closures — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="closures">Closures</h1>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#what-is-a-closure" id="markdown-toc-what-is-a-closure">What is a Closure?</a></li>
+  <li><a href="#creating-closures" id="markdown-toc-creating-closures">Creating Closures</a></li>
+  <li><a href="#capturing-variables" id="markdown-toc-capturing-variables">Capturing Variables</a></li>
+  <li><a href="#higher-order-functions" id="markdown-toc-higher-order-functions">Higher-Order Functions</a>    <ol>
+      <li><a href="#function-as-argument" id="markdown-toc-function-as-argument">Function as Argument</a></li>
+      <li><a href="#function-as-return-value-currying" id="markdown-toc-function-as-return-value-currying">Function as Return Value (Currying)</a></li>
+      <li><a href="#map-over-a-list" id="markdown-toc-map-over-a-list">Map over a List</a></li>
+      <li><a href="#fold--reduce" id="markdown-toc-fold--reduce">Fold / Reduce</a></li>
+    </ol>
+  </li>
+  <li><a href="#recursive-closures" id="markdown-toc-recursive-closures">Recursive Closures</a></li>
+  <li><a href="#mutual-recursion" id="markdown-toc-mutual-recursion">Mutual Recursion</a></li>
+  <li><a href="#implementation-notes" id="markdown-toc-implementation-notes">Implementation Notes</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="what-is-a-closure">What is a Closure?</h2>
+
+<p>A closure is a function value that <strong>captures</strong> a snapshot of the lexical
+environment at the point it was created. When the closure is later called, free
+variables (variables not in the parameter list) are looked up in the captured
+environment.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">make-counter</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">start</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">fn</span> <span class="p">()</span> <span class="nv">start</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="k">let</span> <span class="nv">c</span> <span class="p">(</span><span class="nv">make-counter</span> <span class="mi">10</span><span class="p">))</span>
+<span class="p">(</span><span class="nv">c</span><span class="p">)</span>   <span class="c1">; =&gt; 10</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="creating-closures">Creating Closures</h2>
+
+<p>Every <code class="language-plaintext highlighter-rouge">fn</code> expression creates a closure — even top-level functions. The closure
+is the first-class value that gets bound to a name via <code class="language-plaintext highlighter-rouge">let</code>.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">add</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">a</span> <span class="nv">b</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="nv">b</span><span class="p">)))</span>    <span class="c1">; add is a closure</span>
+
+<span class="p">(</span><span class="nv">add</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">)</span>   <span class="c1">; =&gt; 7</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="capturing-variables">Capturing Variables</h2>
+
+<p>Free variables inside a <code class="language-plaintext highlighter-rouge">fn</code> body are captured at the moment <code class="language-plaintext highlighter-rouge">fn</code> is evaluated.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">offset</span> <span class="mi">100</span><span class="p">)</span>
+
+<span class="p">(</span><span class="k">let</span> <span class="nv">shift</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">x</span> <span class="nv">offset</span><span class="p">)))</span>   <span class="c1">; captures offset = 100</span>
+
+<span class="p">(</span><span class="nv">shift</span> <span class="mi">5</span><span class="p">)</span>   <span class="c1">; =&gt; 105</span>
+</code></pre></div></div>
+
+<p>If <code class="language-plaintext highlighter-rouge">offset</code> were rebound later, the closure still holds the original value from
+when it was captured:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">offset</span> <span class="mi">100</span><span class="p">)</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">shift</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">x</span> <span class="nv">offset</span><span class="p">)))</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">offset</span> <span class="mi">999</span><span class="p">)</span>   <span class="c1">; rebind — does NOT affect shift's capture</span>
+
+<span class="p">(</span><span class="nv">shift</span> <span class="mi">5</span><span class="p">)</span>   <span class="c1">; =&gt; 105  (uses the captured 100)</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="higher-order-functions">Higher-Order Functions</h2>
+
+<p>Closures can be passed as arguments and returned as values.</p>
+
+<h3 id="function-as-argument">Function as Argument</h3>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nb">apply</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">x</span><span class="p">)))</span>
+
+<span class="p">(</span><span class="nb">apply</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span> <span class="p">(</span><span class="nb">*</span> <span class="nv">n</span> <span class="nv">n</span><span class="p">))</span> <span class="mi">7</span><span class="p">)</span>   <span class="c1">; =&gt; 49</span>
+</code></pre></div></div>
+
+<h3 id="function-as-return-value-currying">Function as Return Value (Currying)</h3>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">add-n</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">x</span> <span class="nv">n</span><span class="p">))))</span>
+
+<span class="p">(</span><span class="k">let</span> <span class="nv">add10</span> <span class="p">(</span><span class="nv">add-n</span> <span class="mi">10</span><span class="p">))</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">add20</span> <span class="p">(</span><span class="nv">add-n</span> <span class="mi">20</span><span class="p">))</span>
+
+<span class="p">(</span><span class="nv">add10</span> <span class="mi">5</span><span class="p">)</span>    <span class="c1">; =&gt; 15</span>
+<span class="p">(</span><span class="nv">add20</span> <span class="mi">5</span><span class="p">)</span>    <span class="c1">; =&gt; 25</span>
+</code></pre></div></div>
+
+<h3 id="map-over-a-list">Map over a List</h3>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nb">map</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nb">map</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">xs</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">xs</span> <span class="no">nil</span><span class="p">)</span>
+      <span class="no">nil</span>
+      <span class="p">(</span><span class="nb">cons</span> <span class="p">(</span><span class="nv">f</span> <span class="p">(</span><span class="nb">car</span> <span class="nv">xs</span><span class="p">))</span> <span class="p">(</span><span class="nb">map</span> <span class="nv">f</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nv">xs</span><span class="p">))))))</span>
+
+<span class="p">(</span><span class="nb">map</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">*</span> <span class="nv">x</span> <span class="nv">x</span><span class="p">))</span>
+     <span class="p">(</span><span class="nb">cons</span> <span class="mi">1</span> <span class="p">(</span><span class="nb">cons</span> <span class="mi">2</span> <span class="p">(</span><span class="nb">cons</span> <span class="mi">3</span> <span class="no">nil</span><span class="p">))))</span>
+<span class="c1">; =&gt; (1 . (4 . (9 . 0)))  i.e. [1, 4, 9]</span>
+</code></pre></div></div>
+
+<h3 id="fold--reduce">Fold / Reduce</h3>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">fold</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">fold</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">acc</span> <span class="nv">xs</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">xs</span> <span class="no">nil</span><span class="p">)</span>
+      <span class="nv">acc</span>
+      <span class="p">(</span><span class="nv">fold</span> <span class="nv">f</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">acc</span> <span class="p">(</span><span class="nb">car</span> <span class="nv">xs</span><span class="p">))</span> <span class="p">(</span><span class="nb">cdr</span> <span class="nv">xs</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="nv">fold</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">a</span> <span class="nv">b</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="nv">b</span><span class="p">))</span> <span class="mi">0</span>
+      <span class="p">(</span><span class="nb">cons</span> <span class="mi">1</span> <span class="p">(</span><span class="nb">cons</span> <span class="mi">2</span> <span class="p">(</span><span class="nb">cons</span> <span class="mi">3</span> <span class="no">nil</span><span class="p">))))</span>
+<span class="c1">; =&gt; 6</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="recursive-closures">Recursive Closures</h2>
+
+<p>Use the named <code class="language-plaintext highlighter-rouge">fn</code> form so the function can call itself:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">fac</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">fac</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="mi">1</span>
+      <span class="p">(</span><span class="nb">*</span> <span class="nv">n</span> <span class="p">(</span><span class="nv">fac</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">))))))</span>
+
+<span class="p">(</span><span class="nv">fac</span> <span class="mi">5</span><span class="p">)</span>   <span class="c1">; =&gt; 120</span>
+</code></pre></div></div>
+
+<p>The name <code class="language-plaintext highlighter-rouge">fac</code> is bound inside the body but <strong>not</strong> automatically in the outer
+scope — that is what the surrounding <code class="language-plaintext highlighter-rouge">let</code> is for.</p>
+
+<hr />
+
+<h2 id="mutual-recursion">Mutual Recursion</h2>
+
+<p>Because <code class="language-plaintext highlighter-rouge">let</code> bindings persist across top-level expressions, mutually recursive
+functions can be defined in sequence:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">even?</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">even?</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span> <span class="mi">1</span> <span class="p">(</span><span class="nv">odd?</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="k">let</span> <span class="nv">odd?</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">odd?</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span> <span class="mi">0</span> <span class="p">(</span><span class="nv">even?</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="nv">even?</span> <span class="mi">10</span><span class="p">)</span>   <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nv">odd?</span> <span class="mi">7</span><span class="p">)</span>     <span class="c1">; =&gt; 1</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">even?</code> references <code class="language-plaintext highlighter-rouge">odd?</code> — which doesn’t exist yet when <code class="language-plaintext highlighter-rouge">even?</code> is compiled.
+Because <code class="language-plaintext highlighter-rouge">odd?</code> is resolved at <strong>runtime</strong> (via environment lookup), this works
+as long as <code class="language-plaintext highlighter-rouge">odd?</code> is defined before <code class="language-plaintext highlighter-rouge">even?</code> is actually <strong>called</strong>.</p>
+
+<hr />
+
+<h2 id="implementation-notes">Implementation Notes</h2>
+
+<p>At runtime, creating a closure (via <code class="language-plaintext highlighter-rouge">OP_MAKE_CLOSURE</code>) snapshots the current
+environment into the closure struct. When a closure is called (via
+<code class="language-plaintext highlighter-rouge">OP_CALL_VAL</code>), the callee environment is built by first loading all captured
+bindings, then layering the argument bindings on top — so parameters shadow
+captured variables with the same name.</p>
+
+<p>The compiler applies <strong>escape analysis</strong>: if a function body contains no inner
+<code class="language-plaintext highlighter-rouge">fn</code> expressions, its <code class="language-plaintext highlighter-rouge">let</code> bindings cannot be captured by any closure and
+<code class="language-plaintext highlighter-rouge">STORE_VAR</code> instructions are skipped entirely, leaving values only in registers.</p>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>

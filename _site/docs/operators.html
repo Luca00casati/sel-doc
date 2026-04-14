@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operators — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="operators">Operators</h1>
+
+<p>All operators are written in <strong>prefix position</strong> inside a list:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="nv">b</span><span class="p">)</span>
+<span class="p">(</span><span class="nv">&lt;&lt;</span> <span class="nv">x</span> <span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="nb">not</span> <span class="nv">flag</span><span class="p">)</span>
+</code></pre></div></div>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#arithmetic" id="markdown-toc-arithmetic">Arithmetic</a>    <ol>
+      <li><a href="#integer-vs-float" id="markdown-toc-integer-vs-float">Integer vs Float</a></li>
+      <li><a href="#overflow--bigint" id="markdown-toc-overflow--bigint">Overflow → Bigint</a></li>
+      <li><a href="#compile-time-constant-folding" id="markdown-toc-compile-time-constant-folding">Compile-time Constant Folding</a></li>
+    </ol>
+  </li>
+  <li><a href="#comparison" id="markdown-toc-comparison">Comparison</a></li>
+  <li><a href="#bitwise" id="markdown-toc-bitwise">Bitwise</a></li>
+  <li><a href="#operator-precedence" id="markdown-toc-operator-precedence">Operator Precedence</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="arithmetic">Arithmetic</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Form</th>
+      <th>Returns</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(+ a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">a + b</code></td>
+      <td>Integer or float; auto-promotes to bigint/bigfloat on overflow</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(- a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">a - b</code></td>
+      <td>Same promotion rules</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(* a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">a * b</code></td>
+      <td>Same promotion rules</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(/ a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">a / b</code></td>
+      <td>Integer division for integers; float division for floats</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(% a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">a mod b</code></td>
+      <td>Integer only; error on bigint operands</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="integer-vs-float">Integer vs Float</h3>
+
+<p>If <strong>both</strong> operands are integers, the result is an integer (exact). If
+<strong>either</strong> operand is a float (or bigfloat), the result is a float.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>        <span class="c1">; =&gt; 3     (integer)</span>
+<span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mf">2.0</span><span class="p">)</span>      <span class="c1">; =&gt; 3.0   (float)</span>
+<span class="p">(</span><span class="nb">/</span> <span class="mi">7</span> <span class="mi">2</span><span class="p">)</span>        <span class="c1">; =&gt; 3     (integer division, truncates)</span>
+<span class="p">(</span><span class="nb">/</span> <span class="mi">7</span> <span class="mf">2.0</span><span class="p">)</span>      <span class="c1">; =&gt; 3.5   (float division)</span>
+<span class="p">(</span><span class="nv">%</span> <span class="mi">10</span> <span class="mi">3</span><span class="p">)</span>       <span class="c1">; =&gt; 1</span>
+</code></pre></div></div>
+
+<h3 id="overflow--bigint">Overflow → Bigint</h3>
+
+<p>Integers that overflow 64 bits are silently promoted to arbitrary-precision
+bigint:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">*</span> <span class="mi">9999999999999999999</span> <span class="mi">9999999999999999999</span><span class="p">)</span>
+<span class="c1">; =&gt; 99999999999999999980000000000000000001</span>
+</code></pre></div></div>
+
+<h3 id="compile-time-constant-folding">Compile-time Constant Folding</h3>
+
+<p>All arithmetic on <strong>literal</strong> operands is evaluated at compile time — no
+instructions are emitted for the computation:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">*</span> <span class="mi">6</span> <span class="mi">7</span><span class="p">)</span>       <span class="c1">; emits a single LOAD_CONST 42</span>
+<span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="p">(</span><span class="nb">+</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">))</span> <span class="c1">; emits LOAD_CONST 6</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="comparison">Comparison</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Form</th>
+      <th>Returns</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(= a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code> if equal, <code class="language-plaintext highlighter-rouge">0</code> otherwise</td>
+      <td>Works for integers, floats, strings</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(&lt; a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code> if <code class="language-plaintext highlighter-rouge">a &lt; b</code>, else <code class="language-plaintext highlighter-rouge">0</code></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(&gt; a b)</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code> if <code class="language-plaintext highlighter-rouge">a &gt; b</code>, else <code class="language-plaintext highlighter-rouge">0</code></td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Comparisons return <code class="language-plaintext highlighter-rouge">1</code> (true) or <code class="language-plaintext highlighter-rouge">0</code> (false) as integers.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">=</span> <span class="mi">3</span> <span class="mi">3</span><span class="p">)</span>      <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">=</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">)</span>      <span class="c1">; =&gt; 0</span>
+<span class="p">(</span><span class="nb">&lt;</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span>      <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">&gt;</span> <span class="mi">10</span> <span class="mi">5</span><span class="p">)</span>     <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">&lt;</span> <span class="mf">2.5</span> <span class="mf">3.0</span><span class="p">)</span>  <span class="c1">; =&gt; 1  (float comparison)</span>
+</code></pre></div></div>
+
+<p><strong>String equality</strong> with <code class="language-plaintext highlighter-rouge">=</code> compares byte-by-byte:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">=</span> <span class="s">"abc"</span> <span class="s">"abc"</span><span class="p">)</span>   <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">=</span> <span class="s">"abc"</span> <span class="s">"xyz"</span><span class="p">)</span>   <span class="c1">; =&gt; 0</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="bitwise">Bitwise</h2>
+
+<p>All bitwise operators require <strong>integer</strong> operands. They do not work on floats
+or bigfloats.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Form</th>
+      <th>Operation</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(&amp; a b)</code></td>
+      <td>Bitwise AND</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(\| a b)</code></td>
+      <td>Bitwise OR</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(^ a b)</code></td>
+      <td>Bitwise XOR</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(~ a)</code></td>
+      <td>Bitwise NOT (unary)</td>
+      <td>One’s complement</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(&lt;&lt; a n)</code></td>
+      <td>Left shift <code class="language-plaintext highlighter-rouge">a</code> by <code class="language-plaintext highlighter-rouge">n</code> bits</td>
+      <td><code class="language-plaintext highlighter-rouge">n</code> must be 0–63</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">(&gt;&gt; a n)</code></td>
+      <td>Right shift <code class="language-plaintext highlighter-rouge">a</code> by <code class="language-plaintext highlighter-rouge">n</code> bits (arithmetic)</td>
+      <td><code class="language-plaintext highlighter-rouge">n</code> must be 0–63</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nv">&amp;</span> <span class="nv">0b1100</span> <span class="nv">0b1010</span><span class="p">)</span>   <span class="c1">; = (&amp; 12 10) =&gt; 8   (0b1000)</span>
+<span class="p">(</span><span class="err">|</span> <span class="mi">12</span> <span class="mi">10</span><span class="p">)</span>           <span class="c1">; =&gt; 14  (0b1110)</span>
+<span class="p">(</span><span class="nv">^</span> <span class="mi">12</span> <span class="mi">10</span><span class="p">)</span>           <span class="c1">; =&gt; 6   (0b0110)</span>
+<span class="p">(</span><span class="nv">~</span> <span class="mi">0</span><span class="p">)</span>               <span class="c1">; =&gt; -1</span>
+<span class="p">(</span><span class="nv">&lt;&lt;</span> <span class="mi">1</span> <span class="mi">10</span><span class="p">)</span>           <span class="c1">; =&gt; 1024</span>
+<span class="p">(</span><span class="nv">&gt;&gt;</span> <span class="mi">1024</span> <span class="mi">3</span><span class="p">)</span>         <span class="c1">; =&gt; 128</span>
+</code></pre></div></div>
+
+<p><strong>Constant folding</strong> applies to bitwise operators too:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nv">&lt;&lt;</span> <span class="mi">1</span> <span class="mi">8</span><span class="p">)</span>   <span class="c1">; compiles to LOAD_CONST 256</span>
+<span class="p">(</span><span class="nv">&amp;</span> <span class="mi">255</span> <span class="mi">15</span><span class="p">)</span> <span class="c1">; compiles to LOAD_CONST 15</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="operator-precedence">Operator Precedence</h2>
+
+<p>sel has no operator precedence — all operators are explicit via parentheses.
+There is no infix syntax.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; "1 + 2 * 3" must be written explicitly:</span>
+<span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="p">(</span><span class="nb">*</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">))</span>   <span class="c1">; =&gt; 7  (multiplication first)</span>
+<span class="p">(</span><span class="nb">*</span> <span class="p">(</span><span class="nb">+</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">)</span> <span class="mi">3</span><span class="p">)</span>   <span class="c1">; =&gt; 9  (addition first)</span>
+</code></pre></div></div>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>

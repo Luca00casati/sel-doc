@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Internals — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="internals">Internals</h1>
+
+<p>This page documents the compiler pipeline, bytecode format, and VM architecture
+for contributors and curious users.</p>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#pipeline" id="markdown-toc-pipeline">Pipeline</a></li>
+  <li><a href="#source-files" id="markdown-toc-source-files">Source Files</a></li>
+  <li><a href="#value-type--string" id="markdown-toc-value-type--string">Value Type — <code class="language-plaintext highlighter-rouge">String</code></a></li>
+  <li><a href="#bytecode--opcodes" id="markdown-toc-bytecode--opcodes">Bytecode — Opcodes</a>    <ol>
+      <li><a href="#variable-access" id="markdown-toc-variable-access">Variable Access</a></li>
+      <li><a href="#arithmetic" id="markdown-toc-arithmetic">Arithmetic</a></li>
+      <li><a href="#comparison" id="markdown-toc-comparison">Comparison</a></li>
+      <li><a href="#boolean" id="markdown-toc-boolean">Boolean</a></li>
+      <li><a href="#bitwise" id="markdown-toc-bitwise">Bitwise</a></li>
+      <li><a href="#control-flow" id="markdown-toc-control-flow">Control Flow</a></li>
+      <li><a href="#calls-and-closures" id="markdown-toc-calls-and-closures">Calls and Closures</a></li>
+      <li><a href="#list" id="markdown-toc-list">List</a></li>
+      <li><a href="#io" id="markdown-toc-io">I/O</a></li>
+    </ol>
+  </li>
+  <li><a href="#vm-architecture" id="markdown-toc-vm-architecture">VM Architecture</a>    <ol>
+      <li><a href="#vmframe" id="markdown-toc-vmframe">VMFrame</a></li>
+      <li><a href="#pools" id="markdown-toc-pools">Pools</a></li>
+      <li><a href="#call-dispatch" id="markdown-toc-call-dispatch">Call Dispatch</a></li>
+    </ol>
+  </li>
+  <li><a href="#compiler-optimisations" id="markdown-toc-compiler-optimisations">Compiler Optimisations</a>    <ol>
+      <li><a href="#1-constant-folding" id="markdown-toc-1-constant-folding">1. Constant Folding</a></li>
+      <li><a href="#2-dead-branch-elimination" id="markdown-toc-2-dead-branch-elimination">2. Dead Branch Elimination</a></li>
+      <li><a href="#3-escape-analysis" id="markdown-toc-3-escape-analysis">3. Escape Analysis</a></li>
+      <li><a href="#4-ssa-register-tracking" id="markdown-toc-4-ssa-register-tracking">4. SSA Register Tracking</a></li>
+      <li><a href="#5-dead-parameter-elimination" id="markdown-toc-5-dead-parameter-elimination">5. Dead Parameter Elimination</a></li>
+      <li><a href="#6-destination-hint-propagation" id="markdown-toc-6-destination-hint-propagation">6. Destination-Hint Propagation</a></li>
+      <li><a href="#7-immediate-operand-folding" id="markdown-toc-7-immediate-operand-folding">7. Immediate-Operand Folding</a></li>
+      <li><a href="#8-tail-call-optimisation" id="markdown-toc-8-tail-call-optimisation">8. Tail Call Optimisation</a></li>
+      <li><a href="#9-function-inlining" id="markdown-toc-9-function-inlining">9. Function Inlining</a></li>
+    </ol>
+  </li>
+  <li><a href="#arena-allocator" id="markdown-toc-arena-allocator">Arena Allocator</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="pipeline">Pipeline</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>source text
+    │
+    ▼
+tokenizer.c  ──  Token (flat array of String + kind + line)
+    │
+    ▼
+tokenizer.c  ──  AST (Node tree: NODE_NUMBER / NODE_SYMBOL / NODE_LIST)
+    │
+    ▼
+compiler.c   ──  Chunk (array of Instructions + register count)
+    │
+    ▼
+vm.c         ──  String (result value)
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="source-files">Source Files</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Responsibility</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tokenizer.c</code> / <code class="language-plaintext highlighter-rouge">tokenizer.h</code></td>
+      <td>Lexing and AST construction</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">compiler.c</code> / <code class="language-plaintext highlighter-rouge">compiler.h</code></td>
+      <td>AST → bytecode; all compile-time optimisations</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">vm.c</code> / <code class="language-plaintext highlighter-rouge">vm.h</code></td>
+      <td>Bytecode interpreter, function registry, emit helpers</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">main.c</code></td>
+      <td>REPL and file runner</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sel_string.h</code> / <code class="language-plaintext highlighter-rouge">sel_string.c</code></td>
+      <td>Tagged <code class="language-plaintext highlighter-rouge">String</code> value type</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bigint.c</code> / <code class="language-plaintext highlighter-rouge">bigint.h</code></td>
+      <td>Arbitrary-precision integer arithmetic</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bigfloat.c</code> / <code class="language-plaintext highlighter-rouge">bigfloat.h</code></td>
+      <td>Arbitrary-precision float arithmetic</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">arena.c</code> / <code class="language-plaintext highlighter-rouge">arena.h</code></td>
+      <td>Bump-pointer arena allocator</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="value-type--string">Value Type — <code class="language-plaintext highlighter-rouge">String</code></h2>
+
+<p>Every sel runtime value is a <code class="language-plaintext highlighter-rouge">String</code> struct (<code class="language-plaintext highlighter-rouge">sel_string.h</code>):</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+    <span class="kt">char</span><span class="o">*</span>           <span class="n">data</span><span class="p">;</span>     <span class="cm">/* NULL → numeric / closure / cons */</span>
+    <span class="kt">int</span>             <span class="n">size</span><span class="p">;</span>
+    <span class="kt">long</span>            <span class="n">ival</span><span class="p">;</span>     <span class="cm">/* tagged integer when data==NULL, is_float==0 */</span>
+    <span class="k">struct</span> <span class="n">Closure</span><span class="o">*</span> <span class="n">closure</span><span class="p">;</span>  <span class="cm">/* non-NULL → closure value */</span>
+    <span class="k">struct</span> <span class="n">Cons</span><span class="o">*</span>    <span class="n">cons</span><span class="p">;</span>     <span class="cm">/* non-NULL → cons cell */</span>
+    <span class="kt">double</span>          <span class="n">fval</span><span class="p">;</span>     <span class="cm">/* tagged double when data==NULL, is_float!=0 */</span>
+    <span class="kt">int</span>             <span class="n">is_float</span><span class="p">;</span> <span class="cm">/* non-zero: tagged double or bigfloat string */</span>
+<span class="p">}</span> <span class="n">String</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Dispatch rules:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">data</code></th>
+      <th><code class="language-plaintext highlighter-rouge">closure</code></th>
+      <th><code class="language-plaintext highlighter-rouge">cons</code></th>
+      <th><code class="language-plaintext highlighter-rouge">is_float</code></th>
+      <th>Kind</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>0</td>
+      <td>Tagged integer (<code class="language-plaintext highlighter-rouge">ival</code>)</td>
+    </tr>
+    <tr>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>≠0</td>
+      <td>Tagged double (<code class="language-plaintext highlighter-rouge">fval</code>)</td>
+    </tr>
+    <tr>
+      <td>≠NULL</td>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>0</td>
+      <td>String / bigint bytes</td>
+    </tr>
+    <tr>
+      <td>≠NULL</td>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>≠0</td>
+      <td>Bigfloat decimal string</td>
+    </tr>
+    <tr>
+      <td>NULL</td>
+      <td>≠NULL</td>
+      <td>NULL</td>
+      <td>—</td>
+      <td>Closure</td>
+    </tr>
+    <tr>
+      <td>NULL</td>
+      <td>NULL</td>
+      <td>≠NULL</td>
+      <td>—</td>
+      <td>Cons cell</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="bytecode--opcodes">Bytecode — Opcodes</h2>
+
+<p>All opcodes are in the <code class="language-plaintext highlighter-rouge">OpCode</code> enum in <code class="language-plaintext highlighter-rouge">vm.h</code>. Each instruction has:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">op</code> — the opcode</li>
+  <li><code class="language-plaintext highlighter-rouge">dst</code>, <code class="language-plaintext highlighter-rouge">a</code>, <code class="language-plaintext highlighter-rouge">b</code> — register indices (overloaded for jumps and calls — see below)</li>
+  <li><code class="language-plaintext highlighter-rouge">value</code> — a <code class="language-plaintext highlighter-rouge">String</code> literal (for LOAD_CONST, LOAD_VAR, STORE_VAR, IMM ops)</li>
+  <li><code class="language-plaintext highlighter-rouge">arg_regs</code> / <code class="language-plaintext highlighter-rouge">argc</code> — argument register array (for CALL variants)</li>
+  <li><code class="language-plaintext highlighter-rouge">line</code> — source line number</li>
+</ul>
+
+<h3 id="variable-access">Variable Access</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_LOAD_CONST</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = value</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_LOAD_VAR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = env[value]</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_STORE_VAR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">env[value] = dst</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_MOVE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="arithmetic">Arithmetic</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_ADD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a + b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_SUB</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a - b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_MUL</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a * b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_DIV</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a / b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_MOD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a % b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_ADD_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a + value</code> (immediate constant in <code class="language-plaintext highlighter-rouge">value</code> field)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_SUB_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a - value</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_MUL_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a * value</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="comparison">Comparison</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_LT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = (a &lt; b)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_EQ</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = (a == b)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_LT_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = (a &lt; value)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_GT_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = (a &gt; value)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_EQ_IMM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = (a == value)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="boolean">Boolean</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_NOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = !a</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="bitwise">Bitwise</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_BAND</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a &amp; b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_BOR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a \| b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_BXOR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a ^ b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_BNOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = ~a</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_SHL</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a &lt;&lt; b</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_SHR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = a &gt;&gt; b</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="control-flow">Control Flow</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_JMP</code></td>
+      <td><code class="language-plaintext highlighter-rouge">ip = a</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_JMP_IF_FALSE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">if falsy(dst): ip = a</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_HALT</code></td>
+      <td>stop; return <code class="language-plaintext highlighter-rouge">regs[dst]</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="calls-and-closures">Calls and Closures</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_CALL</code></td>
+      <td>Push new frame; <code class="language-plaintext highlighter-rouge">a</code> = function id</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_CALL_VAL</code></td>
+      <td>Push new frame; <code class="language-plaintext highlighter-rouge">a</code> = register holding closure</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code></td>
+      <td>Reuse current frame; <code class="language-plaintext highlighter-rouge">a</code> = function id</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_TAIL_CALL_VAL</code></td>
+      <td>Reuse current frame; <code class="language-plaintext highlighter-rouge">a</code> = register holding closure</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_RET</code></td>
+      <td>Pop frame; write <code class="language-plaintext highlighter-rouge">regs[dst]</code> into caller’s <code class="language-plaintext highlighter-rouge">ret_dst</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_MAKE_CLOSURE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = new Closure(fn_id=a, captured_env=copy of cur_env)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="list">List</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_CONS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = cons(a, b)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_CAR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = car(a)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_CDR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">dst = cdr(a)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="io">I/O</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Opcode</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_PRINT</code></td>
+      <td>print <code class="language-plaintext highlighter-rouge">a</code>; <code class="language-plaintext highlighter-rouge">dst = a</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OP_PRINTLN</code></td>
+      <td>print <code class="language-plaintext highlighter-rouge">a</code> + newline; <code class="language-plaintext highlighter-rouge">dst = a</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<h2 id="vm-architecture">VM Architecture</h2>
+
+<p>The VM is <strong>iterative</strong> (no C recursion for sel function calls). The key data
+structures are:</p>
+
+<h3 id="vmframe">VMFrame</h3>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+    <span class="n">Chunk</span><span class="o">*</span> <span class="n">chunk</span><span class="p">;</span>
+    <span class="kt">int</span>    <span class="n">ip</span><span class="p">;</span>
+    <span class="kt">int</span>    <span class="n">regs_base</span><span class="p">;</span>  <span class="cm">/* offset into the global register pool */</span>
+    <span class="kt">int</span>    <span class="n">ret_dst</span><span class="p">;</span>    <span class="cm">/* destination register in caller's frame */</span>
+<span class="p">}</span> <span class="n">VMFrame</span><span class="p">;</span>
+</code></pre></div></div>
+
+<h3 id="pools">Pools</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pool</th>
+      <th>Max size</th>
+      <th>Allocation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Frame stack (<code class="language-plaintext highlighter-rouge">vm_frame_stack</code>)</td>
+      <td>200,000 frames</td>
+      <td><code class="language-plaintext highlighter-rouge">realloc</code>-grown</td>
+    </tr>
+    <tr>
+      <td>Register pool (<code class="language-plaintext highlighter-rouge">vm_reg_pool</code>)</td>
+      <td>2,000,000 slots</td>
+      <td><code class="language-plaintext highlighter-rouge">realloc</code>-grown</td>
+    </tr>
+    <tr>
+      <td>Per-frame env (<code class="language-plaintext highlighter-rouge">vm_envs</code>)</td>
+      <td>One per frame</td>
+      <td>Arena-allocated per call</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Register pools are <strong>flat arrays</strong>. Each frame gets a contiguous slice starting
+at <code class="language-plaintext highlighter-rouge">regs_base</code>. No frame sees another frame’s registers.</p>
+
+<h3 id="call-dispatch">Call Dispatch</h3>
+
+<p><code class="language-plaintext highlighter-rouge">OP_CALL</code>:</p>
+<ol>
+  <li>Advance caller <code class="language-plaintext highlighter-rouge">ip</code> past the <code class="language-plaintext highlighter-rouge">CALL</code> instruction.</li>
+  <li>Grow pools if needed.</li>
+  <li>Push a new <code class="language-plaintext highlighter-rouge">VMFrame</code> at <code class="language-plaintext highlighter-rouge">frame_top + 1</code>.</li>
+  <li>Arena-allocate a callee <code class="language-plaintext highlighter-rouge">Env</code>; bind argument registers by name.</li>
+  <li>Switch <code class="language-plaintext highlighter-rouge">cur</code>, <code class="language-plaintext highlighter-rouge">cur_env</code>, <code class="language-plaintext highlighter-rouge">regs</code> to the callee frame.</li>
+</ol>
+
+<p><code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code>:</p>
+<ol>
+  <li>Reuse the <strong>current</strong> frame (update <code class="language-plaintext highlighter-rouge">chunk</code>, reset <code class="language-plaintext highlighter-rouge">ip = 0</code>).</li>
+  <li>Reset <code class="language-plaintext highlighter-rouge">cur_env</code>; rebind arguments.</li>
+  <li>No frame growth — O(1) stack.</li>
+</ol>
+
+<p><code class="language-plaintext highlighter-rouge">OP_RET</code>:</p>
+<ol>
+  <li>Write return value into caller’s <code class="language-plaintext highlighter-rouge">regs[ret_dst]</code>.</li>
+  <li>Shrink <code class="language-plaintext highlighter-rouge">regs_top</code> back to caller’s <code class="language-plaintext highlighter-rouge">regs_base + caller-&gt;chunk-&gt;reg_count</code>.</li>
+  <li>Decrement <code class="language-plaintext highlighter-rouge">frame_top</code>.</li>
+  <li>Switch <code class="language-plaintext highlighter-rouge">cur</code>, <code class="language-plaintext highlighter-rouge">cur_env</code>, <code class="language-plaintext highlighter-rouge">regs</code> back to the caller.</li>
+</ol>
+
+<hr />
+
+<h2 id="compiler-optimisations">Compiler Optimisations</h2>
+
+<p>Nine optimisation passes are applied at compile time, in order:</p>
+
+<h3 id="1-constant-folding">1. Constant Folding</h3>
+
+<p>Arithmetic, comparison, boolean, and bitwise expressions on <strong>literal</strong>
+operands are evaluated at compile time and replaced by a single <code class="language-plaintext highlighter-rouge">LOAD_CONST</code>.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">+</span> <span class="mi">2</span> <span class="p">(</span><span class="nb">*</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">))</span>   <span class="c1">; → LOAD_CONST 14</span>
+</code></pre></div></div>
+
+<p>Overflow, bigfloat, and bigint cases are deferred to the runtime to keep the
+compiler simple.</p>
+
+<h3 id="2-dead-branch-elimination">2. Dead Branch Elimination</h3>
+
+<p><code class="language-plaintext highlighter-rouge">if</code> forms with a constant condition compile only the live branch.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">if</span> <span class="mi">1</span> <span class="s">"yes"</span> <span class="s">"no"</span><span class="p">)</span>   <span class="c1">; → LOAD_CONST "yes"  (else branch is never emitted)</span>
+</code></pre></div></div>
+
+<h3 id="3-escape-analysis">3. Escape Analysis</h3>
+
+<p>Inside a function body that contains <strong>no inner <code class="language-plaintext highlighter-rouge">fn</code> expressions</strong>, no closure
+can capture the function’s <code class="language-plaintext highlighter-rouge">let</code> bindings. Therefore <code class="language-plaintext highlighter-rouge">STORE_VAR</code> instructions
+for those bindings are suppressed — values live only in registers.</p>
+
+<h3 id="4-ssa-register-tracking">4. SSA Register Tracking</h3>
+
+<p><code class="language-plaintext highlighter-rouge">let</code> bindings are tracked by name → register in a compile-time <code class="language-plaintext highlighter-rouge">VarScope</code>.
+Subsequent references to the name resolve directly to the register, avoiding
+<code class="language-plaintext highlighter-rouge">LOAD_VAR</code> lookups for the common case.</p>
+
+<h3 id="5-dead-parameter-elimination">5. Dead Parameter Elimination</h3>
+
+<p>Function parameters that are never referenced in the body are never loaded.
+No <code class="language-plaintext highlighter-rouge">LOAD_VAR</code> is emitted for them.</p>
+
+<h3 id="6-destination-hint-propagation">6. Destination-Hint Propagation</h3>
+
+<p>The compile function accepts a <code class="language-plaintext highlighter-rouge">dst</code> hint register. Sub-expressions write
+directly into the requested register, avoiding a <code class="language-plaintext highlighter-rouge">MOVE</code> to copy the result.</p>
+
+<h3 id="7-immediate-operand-folding">7. Immediate-Operand Folding</h3>
+
+<p>When one operand of <code class="language-plaintext highlighter-rouge">+</code>, <code class="language-plaintext highlighter-rouge">-</code>, <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">=</code>, <code class="language-plaintext highlighter-rouge">&lt;</code>, or <code class="language-plaintext highlighter-rouge">&gt;</code> is a compile-time
+constant, the compiler emits an <code class="language-plaintext highlighter-rouge">*_IMM</code> instruction (e.g. <code class="language-plaintext highlighter-rouge">OP_ADD_IMM</code>) that
+carries the constant inline. This saves a <code class="language-plaintext highlighter-rouge">LOAD_CONST</code> + register.</p>
+
+<h3 id="8-tail-call-optimisation">8. Tail Call Optimisation</h3>
+
+<p>Calls in tail position emit <code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code> / <code class="language-plaintext highlighter-rouge">OP_TAIL_CALL_VAL</code>, which reuse
+the current frame. See <a href="tail-calls">Tail Calls</a>.</p>
+
+<h3 id="9-function-inlining">9. Function Inlining</h3>
+
+<p>Small, pure functions (body ≤ 8 real instructions, no nested calls or
+closures, no free-variable loads) are inlined at call sites. Inlining is
+attempted <strong>before</strong> the tail-call check, so tail calls to eligible functions
+are also inlined.</p>
+
+<p>Eligibility guard: <code class="language-plaintext highlighter-rouge">f-&gt;compiled</code> must be <code class="language-plaintext highlighter-rouge">1</code>. This prevents inlining a
+function whose body is still being compiled (which would cause infinite
+recursion in the compiler).</p>
+
+<hr />
+
+<h2 id="arena-allocator">Arena Allocator</h2>
+
+<p>All heap memory used by the compiler and VM goes through a bump-pointer arena
+(<code class="language-plaintext highlighter-rouge">arena.c</code>). At program exit (or REPL exit), <code class="language-plaintext highlighter-rouge">arena_release()</code> frees everything
+in a single call. There are no individual <code class="language-plaintext highlighter-rouge">free</code> calls in the hot path.</p>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>

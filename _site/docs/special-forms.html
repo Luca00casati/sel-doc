@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Special Forms — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="special-forms">Special Forms</h1>
+
+<p>Special forms look like function calls but are handled directly by the compiler.
+They do not evaluate all their arguments eagerly.</p>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#let--bind-a-name" id="markdown-toc-let--bind-a-name"><code class="language-plaintext highlighter-rouge">let</code> — bind a name</a></li>
+  <li><a href="#if--conditional" id="markdown-toc-if--conditional"><code class="language-plaintext highlighter-rouge">if</code> — conditional</a></li>
+  <li><a href="#fn--anonymous-and-named-functions" id="markdown-toc-fn--anonymous-and-named-functions"><code class="language-plaintext highlighter-rouge">fn</code> — anonymous and named functions</a>    <ol>
+      <li><a href="#anonymous" id="markdown-toc-anonymous">Anonymous</a></li>
+      <li><a href="#named-for-recursion" id="markdown-toc-named-for-recursion">Named (for recursion)</a></li>
+      <li><a href="#multiple-parameters" id="markdown-toc-multiple-parameters">Multiple Parameters</a></li>
+      <li><a href="#zero-parameters" id="markdown-toc-zero-parameters">Zero Parameters</a></li>
+    </ol>
+  </li>
+  <li><a href="#and--short-circuit-conjunction" id="markdown-toc-and--short-circuit-conjunction"><code class="language-plaintext highlighter-rouge">and</code> — short-circuit conjunction</a></li>
+  <li><a href="#or--short-circuit-disjunction" id="markdown-toc-or--short-circuit-disjunction"><code class="language-plaintext highlighter-rouge">or</code> — short-circuit disjunction</a></li>
+  <li><a href="#not--logical-negation" id="markdown-toc-not--logical-negation"><code class="language-plaintext highlighter-rouge">not</code> — logical negation</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="let--bind-a-name"><code class="language-plaintext highlighter-rouge">let</code> — bind a name</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(let &lt;name&gt; &lt;expr&gt;)
+</code></pre></div></div>
+
+<p>Evaluates <code class="language-plaintext highlighter-rouge">&lt;expr&gt;</code> and binds the result to <code class="language-plaintext highlighter-rouge">&lt;name&gt;</code> in the current environment.
+Returns the value.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">x</span> <span class="mi">42</span><span class="p">)</span>          <span class="c1">; x = 42</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">y</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">x</span> <span class="mi">1</span><span class="p">))</span>     <span class="c1">; y = 43</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">msg</span> <span class="s">"hello"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">let</code> is the only way to introduce a named binding. There is no <code class="language-plaintext highlighter-rouge">define</code> or
+<code class="language-plaintext highlighter-rouge">set!</code>.</p>
+
+<p><strong>Note:</strong> Multiple <code class="language-plaintext highlighter-rouge">let</code> forms in the same top-level or function body are
+independent. Later <code class="language-plaintext highlighter-rouge">let</code> forms can reference earlier ones because bindings
+persist across expressions in the same session / file.</p>
+
+<hr />
+
+<h2 id="if--conditional"><code class="language-plaintext highlighter-rouge">if</code> — conditional</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(if &lt;condition&gt; &lt;then&gt; &lt;else&gt;)
+</code></pre></div></div>
+
+<p>Evaluates <code class="language-plaintext highlighter-rouge">&lt;condition&gt;</code>. If truthy, evaluates and returns <code class="language-plaintext highlighter-rouge">&lt;then&gt;</code>; otherwise
+evaluates and returns <code class="language-plaintext highlighter-rouge">&lt;else&gt;</code>. Only the chosen branch is evaluated — the other
+is not.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">x</span> <span class="mi">0</span><span class="p">)</span> <span class="s">"zero"</span> <span class="s">"nonzero"</span><span class="p">)</span>
+<span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">&lt;</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span> <span class="p">(</span><span class="nb">-</span> <span class="mi">0</span> <span class="nv">n</span><span class="p">)</span> <span class="nv">n</span><span class="p">)</span>    <span class="c1">; absolute value</span>
+</code></pre></div></div>
+
+<p><strong>Compile-time optimisation:</strong> If the condition is a constant, the compiler
+discards the dead branch entirely — it is never emitted to bytecode.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">if</span> <span class="mi">1</span> <span class="s">"always"</span> <span class="s">"never"</span><span class="p">)</span>   <span class="c1">; compiles to just "always"</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="fn--anonymous-and-named-functions"><code class="language-plaintext highlighter-rouge">fn</code> — anonymous and named functions</h2>
+
+<h3 id="anonymous">Anonymous</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(fn (&lt;param&gt; …) &lt;body&gt;)
+</code></pre></div></div>
+
+<p>Creates a closure with the given parameters and body. The body is a single
+expression (wrap multiple expressions in a <code class="language-plaintext highlighter-rouge">let</code> chain or nest them).</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">square</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">x</span><span class="p">)</span> <span class="p">(</span><span class="nb">*</span> <span class="nv">x</span> <span class="nv">x</span><span class="p">)))</span>
+<span class="p">(</span><span class="nv">square</span> <span class="mi">9</span><span class="p">)</span>   <span class="c1">; =&gt; 81</span>
+</code></pre></div></div>
+
+<h3 id="named-for-recursion">Named (for recursion)</h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(fn &lt;name&gt; (&lt;param&gt; …) &lt;body&gt;)
+</code></pre></div></div>
+
+<p>Gives the closure a name that is visible <strong>inside the body</strong>, enabling direct
+recursion without needing <code class="language-plaintext highlighter-rouge">let</code> first.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">fac</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">fac</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="mi">1</span>
+      <span class="p">(</span><span class="nb">*</span> <span class="nv">n</span> <span class="p">(</span><span class="nv">fac</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">))))))</span>
+
+<span class="p">(</span><span class="nv">fac</span> <span class="mi">10</span><span class="p">)</span>   <span class="c1">; =&gt; 3628800</span>
+</code></pre></div></div>
+
+<p>The name is bound only within the body — it is not automatically placed in the
+outer environment. Use <code class="language-plaintext highlighter-rouge">let</code> around the <code class="language-plaintext highlighter-rouge">fn</code> to also bind it in the outer scope.</p>
+
+<h3 id="multiple-parameters">Multiple Parameters</h3>
+
+<p>Parameters are listed in the <code class="language-plaintext highlighter-rouge">(…)</code> after the optional name:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nv">fn</span> <span class="p">(</span><span class="nv">a</span> <span class="nv">b</span> <span class="nv">c</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">b</span> <span class="nv">c</span><span class="p">)))</span>
+<span class="p">(</span><span class="nv">fn</span> <span class="nv">add3</span> <span class="p">(</span><span class="nv">a</span> <span class="nv">b</span> <span class="nv">c</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">b</span> <span class="nv">c</span><span class="p">)))</span>
+</code></pre></div></div>
+
+<h3 id="zero-parameters">Zero Parameters</h3>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nv">greet</span> <span class="p">(</span><span class="nv">fn</span> <span class="p">()</span> <span class="p">(</span><span class="nv">println</span> <span class="s">"Hello!"</span><span class="p">)))</span>
+<span class="p">(</span><span class="nv">greet</span><span class="p">)</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="and--short-circuit-conjunction"><code class="language-plaintext highlighter-rouge">and</code> — short-circuit conjunction</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(and &lt;expr&gt; …)
+</code></pre></div></div>
+
+<p>Evaluates expressions left to right. Returns the <strong>first falsy value</strong>, or the
+<strong>last value</strong> if all are truthy. Returns <code class="language-plaintext highlighter-rouge">1</code> for the empty <code class="language-plaintext highlighter-rouge">(and)</code>.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">and</span> <span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">)</span>       <span class="c1">; =&gt; 3</span>
+<span class="p">(</span><span class="nb">and</span> <span class="mi">1</span> <span class="mi">0</span> <span class="mi">3</span><span class="p">)</span>       <span class="c1">; =&gt; 0  (short-circuits, 3 never evaluated)</span>
+<span class="p">(</span><span class="nb">and</span><span class="p">)</span>             <span class="c1">; =&gt; 1</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="or--short-circuit-disjunction"><code class="language-plaintext highlighter-rouge">or</code> — short-circuit disjunction</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(or &lt;expr&gt; …)
+</code></pre></div></div>
+
+<p>Evaluates expressions left to right. Returns the <strong>first truthy value</strong>, or the
+<strong>last value</strong> if all are falsy. Returns <code class="language-plaintext highlighter-rouge">0</code> for the empty <code class="language-plaintext highlighter-rouge">(or)</code>.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">or</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">7</span><span class="p">)</span>        <span class="c1">; =&gt; 7</span>
+<span class="p">(</span><span class="nb">or</span> <span class="mi">5</span> <span class="p">(</span><span class="nb">/</span> <span class="mi">1</span> <span class="mi">0</span><span class="p">))</span>    <span class="c1">; =&gt; 5  (short-circuits, division never evaluated)</span>
+<span class="p">(</span><span class="nb">or</span><span class="p">)</span>              <span class="c1">; =&gt; 0</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="not--logical-negation"><code class="language-plaintext highlighter-rouge">not</code> — logical negation</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(not &lt;expr&gt;)
+</code></pre></div></div>
+
+<p>Returns <code class="language-plaintext highlighter-rouge">1</code> if <code class="language-plaintext highlighter-rouge">&lt;expr&gt;</code> is falsy, <code class="language-plaintext highlighter-rouge">0</code> otherwise.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="nb">not</span> <span class="mi">0</span><span class="p">)</span>          <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">not</span> <span class="mi">1</span><span class="p">)</span>          <span class="c1">; =&gt; 0</span>
+<span class="p">(</span><span class="nb">not</span> <span class="no">nil</span><span class="p">)</span>        <span class="c1">; =&gt; 1</span>
+<span class="p">(</span><span class="nb">not</span> <span class="s">"hello"</span><span class="p">)</span>    <span class="c1">; =&gt; 0</span>
+<span class="p">(</span><span class="nb">not</span> <span class="p">(</span><span class="nb">cons</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">))</span> <span class="c1">; =&gt; 0</span>
+</code></pre></div></div>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>

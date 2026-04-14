@@ -1,0 +1,49 @@
+title: sel
+description: >-
+  sel — a small Lisp-like language compiled to register-based bytecode
+  and executed by an iterative stack VM, written in C.
+
+baseurl: ""
+url: ""
+
+# No external theme — custom layout in _layouts/
+
+# Syntax highlighting
+highlighter: rouge
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Navigation order (used by layout)
+nav:
+  - title: Home
+    url: /
+  - title: Getting Started
+    url: /docs/getting-started
+  - title: Syntax
+    url: /docs/syntax
+  - title: Types
+    url: /docs/types
+  - title: Special Forms
+    url: /docs/special-forms
+  - title: Operators
+    url: /docs/operators
+  - title: Built-in Functions
+    url: /docs/builtins
+  - title: Closures
+    url: /docs/closures
+  - title: Tail Calls
+    url: /docs/tail-calls
+  - title: Examples
+    url: /docs/examples
+  - title: Internals
+    url: /docs/internals
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - "*.gem"
+  - "*.gemspec"
+  - vendor/

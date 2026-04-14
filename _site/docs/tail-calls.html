@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tail Calls — sel</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --accent2:   #79c0ff;
+      --code-bg:   #1e2430;
+      --sidebar-w: 260px;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0 2rem;
+    }
+
+    #sidebar .site-title {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent2);
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+    }
+
+    #sidebar .site-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+
+    #sidebar nav ul {
+      list-style: none;
+    }
+
+    #sidebar nav ul li a {
+      display: block;
+      padding: 0.35rem 1.25rem;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    #sidebar nav ul li a:hover {
+      color: var(--text);
+      background: rgba(88,166,255,0.06);
+    }
+
+    #sidebar nav ul li a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      font-weight: 600;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .page-content {
+      max-width: 860px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      font-weight: 600;
+      line-height: 1.3;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 { font-size: 2rem; margin-top: 0; }
+    h2 { font-size: 1.4rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1rem; }
+
+    p { margin: 0.8rem 0; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    strong { font-weight: 600; }
+    em     { font-style: italic; }
+
+    ul, ol {
+      margin: 0.5rem 0 0.5rem 1.5rem;
+    }
+    li { margin: 0.25rem 0; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* ===== INLINE CODE ===== */
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1em 0.35em;
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      color: #f0a0a0;
+    }
+
+    /* ===== CODE BLOCKS ===== */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    /* Rouge syntax highlighting (dark) */
+    .highlight .c  { color: #6a9955; }   /* comment */
+    .highlight .k  { color: #c792ea; }   /* keyword */
+    .highlight .s  { color: #ce9178; }   /* string */
+    .highlight .s1 { color: #ce9178; }
+    .highlight .s2 { color: #ce9178; }
+    .highlight .mi { color: #b5cea8; }   /* integer */
+    .highlight .mf { color: #b5cea8; }   /* float */
+    .highlight .n  { color: #9cdcfe; }   /* name */
+    .highlight .o  { color: #d4d4d4; }   /* operator */
+    .highlight .p  { color: #d4d4d4; }   /* punctuation */
+    .highlight .nb { color: #dcdcaa; }   /* builtin */
+    .highlight .nf { color: #dcdcaa; }   /* function name */
+    .highlight .err{ background: none; } /* suppress error backgrounds */
+
+    /* ===== TABLES ===== */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+
+    /* ===== BLOCKQUOTE ===== */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      color: var(--muted);
+      background: rgba(88,166,255,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* ===== DETAILS / TOC ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--surface);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent2);
+      font-size: 0.9rem;
+    }
+
+    details[open] summary { margin-bottom: 0.5rem; }
+
+    /* ===== FOOTER ===== */
+    footer {
+      margin-left: var(--sidebar-w);
+      border-top: 1px solid var(--border);
+      padding: 1rem 2.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      :root { --sidebar-w: 0px; }
+      #sidebar { display: none; }
+      #main    { margin-left: 0; }
+      footer   { margin-left: 0; }
+      .page-content { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <a href="/" class="site-title">sel</a>
+  <p class="site-desc">sel — a small Lisp-like language compiled to register-based bytecode and executed by an iterative stack VM, written in C.</p>
+  <nav>
+    <ul>
+      
+      <li>
+        <a href="/"
+           >
+          Home
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/getting-started"
+           >
+          Getting Started
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/syntax"
+           >
+          Syntax
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/types"
+           >
+          Types
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/special-forms"
+           >
+          Special Forms
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/operators"
+           >
+          Operators
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/builtins"
+           >
+          Built-in Functions
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/closures"
+           >
+          Closures
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/tail-calls"
+           >
+          Tail Calls
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/examples"
+           >
+          Examples
+        </a>
+      </li>
+      
+      <li>
+        <a href="/docs/internals"
+           >
+          Internals
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+</aside>
+
+<div id="main">
+  <div class="page-content">
+    <h1 class="no_toc" id="tail-calls">Tail Calls</h1>
+
+<details open="">
+  <summary class="text-delta">Contents</summary>
+<ol id="markdown-toc">
+  <li><a href="#what-is-a-tail-call" id="markdown-toc-what-is-a-tail-call">What is a Tail Call?</a></li>
+  <li><a href="#tail-call-optimisation-tco" id="markdown-toc-tail-call-optimisation-tco">Tail Call Optimisation (TCO)</a></li>
+  <li><a href="#writing-tail-recursive-loops" id="markdown-toc-writing-tail-recursive-loops">Writing Tail-Recursive Loops</a></li>
+  <li><a href="#tail-calls-via-closures" id="markdown-toc-tail-calls-via-closures">Tail Calls via Closures</a></li>
+  <li><a href="#how-tco-works-internally" id="markdown-toc-how-tco-works-internally">How TCO Works Internally</a></li>
+  <li><a href="#function-inlining-and-tail-calls" id="markdown-toc-function-inlining-and-tail-calls">Function Inlining and Tail Calls</a></li>
+</ol>
+
+</details>
+
+<hr />
+
+<h2 id="what-is-a-tail-call">What is a Tail Call?</h2>
+
+<p>A call is in <strong>tail position</strong> if its return value is the return value of the
+enclosing function — i.e., there is nothing left to do after the call returns.</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; tail call — last thing in the function body</span>
+<span class="p">(</span><span class="nv">fn</span> <span class="nv">fib</span> <span class="p">(</span><span class="nv">n</span> <span class="nv">acc</span><span class="p">)</span>
+  <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="nv">acc</span>
+    <span class="p">(</span><span class="nv">fib</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">acc</span> <span class="nv">n</span><span class="p">))))</span>   <span class="c1">; &lt;-- tail call</span>
+</code></pre></div></div>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; NOT a tail call — the result is used in a multiplication</span>
+<span class="p">(</span><span class="nv">fn</span> <span class="nv">fac</span> <span class="p">(</span><span class="nv">n</span><span class="p">)</span>
+  <span class="p">(</span><span class="nb">*</span> <span class="nv">n</span> <span class="p">(</span><span class="nv">fac</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">))))</span>   <span class="c1">; &lt;-- NOT a tail call</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="tail-call-optimisation-tco">Tail Call Optimisation (TCO)</h2>
+
+<p>sel implements full tail call optimisation. A tail call reuses the <strong>current
+stack frame</strong> instead of pushing a new one. This means:</p>
+
+<ul>
+  <li>Deep recursive loops that use tail calls use <strong>O(1)</strong> stack space.</li>
+  <li>You can write “loop-as-recursion” patterns with no stack overflow risk.</li>
+</ul>
+
+<p>The VM supports up to 200,000 active frames for non-tail calls; tail-recursive
+loops have no effective depth limit.</p>
+
+<hr />
+
+<h2 id="writing-tail-recursive-loops">Writing Tail-Recursive Loops</h2>
+
+<p>The standard pattern is an <strong>accumulator parameter</strong>:</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; sum of 1..n — tail recursive</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">sum</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">sum</span> <span class="p">(</span><span class="nv">n</span> <span class="nv">acc</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="nv">acc</span>
+      <span class="p">(</span><span class="nv">sum</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">acc</span> <span class="nv">n</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="nv">sum</span> <span class="mi">1000000</span> <span class="mi">0</span><span class="p">)</span>   <span class="c1">; no stack overflow</span>
+</code></pre></div></div>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; factorial — tail recursive</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">fac</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">fac</span> <span class="p">(</span><span class="nv">n</span> <span class="nv">acc</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="nv">acc</span>
+      <span class="p">(</span><span class="nv">fac</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="nb">*</span> <span class="nv">acc</span> <span class="nv">n</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="nv">fac</span> <span class="mi">20</span> <span class="mi">1</span><span class="p">)</span>   <span class="c1">; =&gt; 2432902008176640000</span>
+</code></pre></div></div>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">; Fibonacci — tail recursive</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">fib</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">fib</span> <span class="p">(</span><span class="nv">n</span> <span class="nv">a</span> <span class="nv">b</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="nv">a</span>
+      <span class="p">(</span><span class="nv">fib</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)</span> <span class="nv">b</span> <span class="p">(</span><span class="nb">+</span> <span class="nv">a</span> <span class="nv">b</span><span class="p">)))))</span>
+
+<span class="p">(</span><span class="nv">fib</span> <span class="mi">50</span> <span class="mi">0</span> <span class="mi">1</span><span class="p">)</span>   <span class="c1">; =&gt; 12586269025</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="tail-calls-via-closures">Tail Calls via Closures</h2>
+
+<p>TCO also applies when calling a <strong>closure</strong> in tail position (e.g. a
+higher-order loop):</p>
+
+<div class="language-lisp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">(</span><span class="k">let</span> <span class="nb">loop</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nb">loop</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="mi">0</span>
+      <span class="p">(</span><span class="nb">loop</span> <span class="nv">f</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">)))))</span>   <span class="c1">; tail call to loop (named fn)</span>
+
+<span class="c1">; calling an argument closure in tail position</span>
+<span class="p">(</span><span class="k">let</span> <span class="nv">repeat</span>
+  <span class="p">(</span><span class="nv">fn</span> <span class="nv">repeat</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">n</span><span class="p">)</span>
+    <span class="p">(</span><span class="k">if</span> <span class="p">(</span><span class="nb">=</span> <span class="nv">n</span> <span class="mi">0</span><span class="p">)</span>
+      <span class="no">nil</span>
+      <span class="p">(</span><span class="k">let</span> <span class="nv">_</span> <span class="p">(</span><span class="nv">f</span> <span class="nv">n</span><span class="p">)</span>
+        <span class="p">(</span><span class="nv">repeat</span> <span class="nv">f</span> <span class="p">(</span><span class="nb">-</span> <span class="nv">n</span> <span class="mi">1</span><span class="p">))))))</span>
+</code></pre></div></div>
+
+<hr />
+
+<h2 id="how-tco-works-internally">How TCO Works Internally</h2>
+
+<p>The compiler detects tail position during AST compilation. A call in tail
+position emits <code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code> (for known named functions) or
+<code class="language-plaintext highlighter-rouge">OP_TAIL_CALL_VAL</code> (for closure values) instead of <code class="language-plaintext highlighter-rouge">OP_CALL</code>.</p>
+
+<p>The VM handles <code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code> by reusing the current <code class="language-plaintext highlighter-rouge">VMFrame</code>: it resets the
+frame’s chunk, instruction pointer, and environment in-place without growing the
+frame stack.</p>
+
+<hr />
+
+<h2 id="function-inlining-and-tail-calls">Function Inlining and Tail Calls</h2>
+
+<p>The compiler tries function inlining <strong>before</strong> checking for tail position.
+A tail call to a small, pure function is therefore inlined directly — zero
+call overhead, even better than <code class="language-plaintext highlighter-rouge">OP_TAIL_CALL</code>.</p>
+
+<p>A function is eligible for inlining if:</p>
+<ul>
+  <li>It has been fully compiled (its body is complete).</li>
+  <li>Its body is at most 8 “real” instructions.</li>
+  <li>It contains no nested calls, closures, or free-variable loads.</li>
+</ul>
+
+  </div>
+  <footer>
+    &copy; 2026 sel — built with <a href="https://jekyllrb.com">Jekyll</a>
+  </footer>
+</div>
+
+</body>
+</html>
