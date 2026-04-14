@@ -3,8 +3,8 @@ description: >-
   sel — a small Lisp-like language compiled to register-based bytecode
   and executed by an iterative stack VM, written in C.
 
-baseurl: ""
-url: ""
+baseurl: "/sel-doc"
+url: "https://luca00casati.github.io"
 
 # No external theme — custom layout in _layouts/
 
