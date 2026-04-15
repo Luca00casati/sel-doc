@@ -18,8 +18,8 @@ nav_order: 2
 
 ## Building
 
-sel has no dependencies beyond a C99-compatible compiler. Clone the repository
-and run `make` (or compile the sources directly):
+sel has no dependencies beyond a C99-compatible compiler and GNU binutils.
+Clone the repository and run `make`:
 
 ```sh
 git clone https://github.com/Luca00casati/sel.git
@@ -27,7 +27,16 @@ cd sel
 make
 ```
 
-This produces a single `sel` binary.
+This produces two files that must be kept together:
+
+| File | Purpose |
+|------|---------|
+| `sel` | the interpreter binary |
+| `core.selc` | precompiled standard library bytecode |
+
+`core.selc` is compiled from `core.sel` by the binary itself as part of
+`make`. If it is missing at runtime the interpreter falls back to compiling
+`core.sel` from source automatically.
 
 ---
 
@@ -54,13 +63,16 @@ until the expression is balanced.
 ```
 sel> (let add
 ...>   (fn (a b) (+ a b)))
-<closure>
+#<closure>
 sel> (add 3 4)
 7
 ```
 
-State persists across expressions in the same session — bindings created with
-`let` and functions defined with `fn` are available for the rest of the session.
+The standard library is loaded automatically, so all core macros and functions
+(`map`, `filter`, `list3`, etc.) are available immediately.
+
+State persists across expressions — bindings and functions defined with `let`
+and `fn` remain available for the rest of the session.
 
 Exit the REPL with `Ctrl+D` (EOF).
 
@@ -68,14 +80,15 @@ Exit the REPL with `Ctrl+D` (EOF).
 
 ## Running a File
 
-Pass a `.sel` file as the only argument:
+Pass one or more `.sel` files as arguments:
 
 ```sh
 ./sel program.sel
+./sel lib.sel program.sel   # lib.sel is loaded first
 ```
 
-All top-level expressions in the file are evaluated in order. The value of the
-**last** expression is printed as `Result: <value>`.
+All top-level expressions are evaluated in order across all files. The value of
+the **last** expression is printed as `Result: <value>`.
 
 ```lisp
 ; hello.sel
@@ -87,6 +100,20 @@ All top-level expressions in the file are evaluated in order. The value of the
 $ ./sel hello.sel
 Hello, world!
 Result: 2
+```
+
+---
+
+## Flags
+
+| Flag | Effect |
+|------|--------|
+| `--no-core` | Skip loading the standard library |
+| `--compile-core core.selc` | Compile `core.sel` → `core.selc` and exit |
+
+```sh
+./sel --no-core program.sel       # bare interpreter, no stdlib
+./sel --compile-core core.selc    # regenerate bytecode after editing core.sel
 ```
 
 ---

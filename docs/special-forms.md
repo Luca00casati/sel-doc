@@ -19,30 +19,6 @@ They do not evaluate all their arguments eagerly.
 
 ---
 
-## `let` — bind a name
-
-```
-(let <name> <expr>)
-```
-
-Evaluates `<expr>` and binds the result to `<name>` in the current environment.
-Returns the value.
-
-```lisp
-(let x 42)          ; x = 42
-(let y (+ x 1))     ; y = 43
-(let msg "hello")
-```
-
-`let` is the only way to introduce a named binding. There is no `define` or
-`set!`.
-
-**Note:** Multiple `let` forms in the same top-level or function body are
-independent. Later `let` forms can reference earlier ones because bindings
-persist across expressions in the same session / file.
-
----
-
 ## `if` — conditional
 
 ```
@@ -50,19 +26,18 @@ persist across expressions in the same session / file.
 ```
 
 Evaluates `<condition>`. If truthy, evaluates and returns `<then>`; otherwise
-evaluates and returns `<else>`. Only the chosen branch is evaluated — the other
-is not.
+evaluates and returns `<else>`. Only the chosen branch is evaluated.
 
 ```lisp
 (if (= x 0) "zero" "nonzero")
 (if (< n 0) (- 0 n) n)    ; absolute value
 ```
 
-**Compile-time optimisation:** If the condition is a constant, the compiler
-discards the dead branch entirely — it is never emitted to bytecode.
+**Compile-time optimisation:** if the condition is a constant, the dead branch
+is never emitted to bytecode.
 
 ```lisp
-(if 1 "always" "never")   ; compiles to just "always"
+(if 1 "always" "never")   ; compiles to just LOAD_CONST "always"
 ```
 
 ---
@@ -75,8 +50,7 @@ discards the dead branch entirely — it is never emitted to bytecode.
 (fn (<param> …) <body>)
 ```
 
-Creates a closure with the given parameters and body. The body is a single
-expression (wrap multiple expressions in a `let` chain or nest them).
+Creates a closure with the given parameters and body.
 
 ```lisp
 (let square (fn (x) (* x x)))
@@ -89,8 +63,7 @@ expression (wrap multiple expressions in a `let` chain or nest them).
 (fn <name> (<param> …) <body>)
 ```
 
-Gives the closure a name that is visible **inside the body**, enabling direct
-recursion without needing `let` first.
+Gives the closure a name visible **inside the body**, enabling direct recursion.
 
 ```lisp
 (let fac
@@ -102,73 +75,71 @@ recursion without needing `let` first.
 (fac 10)   ; => 3628800
 ```
 
-The name is bound only within the body — it is not automatically placed in the
-outer environment. Use `let` around the `fn` to also bind it in the outer scope.
+---
 
-### Multiple Parameters
+## `let` — bind a name
 
-Parameters are listed in the `(…)` after the optional name:
-
-```lisp
-(fn (a b c) (+ a (+ b c)))
-(fn add3 (a b c) (+ a (+ b c)))
+```
+(let <name> <expr>)
 ```
 
-### Zero Parameters
+Evaluates `<expr>` and binds the result to `<name>`. Returns the value.
 
 ```lisp
-(let greet (fn () (println "Hello!")))
-(greet)
+(let x 42)
+(let y (+ x 1))
+```
+
+`let` is the only way to introduce a named binding. There is no `define` or `set!`.
+
+---
+
+## `begin` — sequence
+
+```
+(begin <expr> …)
+```
+
+Evaluates expressions left to right and returns the value of the last one.
+Useful for sequencing side effects.
+
+```lisp
+(begin
+  (println "step 1")
+  (println "step 2")
+  42)          ; => 42
 ```
 
 ---
 
-## `and` — short-circuit conjunction
+## `defmacro` — compile-time macro
 
 ```
-(and <expr> …)
+(defmacro <name> (<param> …) <body>)
 ```
 
-Evaluates expressions left to right. Returns the **first falsy value**, or the
-**last value** if all are truthy. Returns `1` for the empty `(and)`.
+Defines a compile-time macro. At every call site, the arguments are substituted
+into `<body>` textually before compilation — no evaluation happens yet.
 
 ```lisp
-(and 1 2 3)       ; => 3
-(and 1 0 3)       ; => 0  (short-circuits, 3 never evaluated)
-(and)             ; => 1
+(defmacro swap (a b)
+  (let tmp a
+    (let a b
+      (let b tmp))))
 ```
 
----
+Macros expand to `if`-expressions, `let` chains, and other forms. There is no
+hygiene — parameter names may shadow outer bindings.
 
-## `or` — short-circuit disjunction
-
-```
-(or <expr> …)
-```
-
-Evaluates expressions left to right. Returns the **first truthy value**, or the
-**last value** if all are falsy. Returns `0` for the empty `(or)`.
+`not`, `and`, `or`, `when`, and `unless` are all defined as macros in
+`core.sel`:
 
 ```lisp
-(or 0 0 7)        ; => 7
-(or 5 (/ 1 0))    ; => 5  (short-circuits, division never evaluated)
-(or)              ; => 0
+(defmacro not    (x)      (if x 0 1))
+(defmacro and    (a b)    (if a b 0))
+(defmacro or     (a b)    (if a a b))
+(defmacro when   (c body) (if c body 0))
+(defmacro unless (c body) (if c 0 body))
 ```
 
----
-
-## `not` — logical negation
-
-```
-(not <expr>)
-```
-
-Returns `1` if `<expr>` is falsy, `0` otherwise.
-
-```lisp
-(not 0)          ; => 1
-(not 1)          ; => 0
-(not nil)        ; => 1
-(not "hello")    ; => 0
-(not (cons 1 2)) ; => 0
-```
+n-ary `and` / `or` compose by nesting: `(and a (and b c))`.

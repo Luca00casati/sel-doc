@@ -22,6 +22,9 @@ for contributors and curious users.
 ## Pipeline
 
 ```
+core.selc (precompiled stdlib)
+    │  deserialize on startup
+    ▼
 source text
     │
     ▼
@@ -29,7 +32,7 @@ tokenizer.c  ──  Token (flat array of String + kind + line)
     │
     ▼
 tokenizer.c  ──  AST (Node tree: NODE_NUMBER / NODE_SYMBOL / NODE_LIST)
-    │
+    │  macro expansion (compiler.c)
     ▼
 compiler.c   ──  Chunk (array of Instructions + register count)
     │
@@ -44,9 +47,10 @@ vm.c         ──  String (result value)
 | File | Responsibility |
 |------|---------------|
 | `tokenizer.c` / `tokenizer.h` | Lexing and AST construction |
-| `compiler.c` / `compiler.h` | AST → bytecode; all compile-time optimisations |
-| `vm.c` / `vm.h` | Bytecode interpreter, function registry, emit helpers |
-| `main.c` | REPL and file runner |
+| `compiler.c` / `compiler.h` | AST → bytecode; macro system; all compile-time optimisations |
+| `vm.c` / `vm.h` | Bytecode interpreter, function registry, emit helpers, serialization |
+| `main.c` | REPL, file runner, core loading |
+| `serde.h` | Shared binary read/write primitives for `core.selc` serialization |
 | `sel_string.h` / `sel_string.c` | Tagged `String` value type |
 | `bigint.c` / `bigint.h` | Arbitrary-precision integer arithmetic |
 | `bigfloat.c` / `bigfloat.h` | Arbitrary-precision float arithmetic |
@@ -226,9 +230,54 @@ at `regs_base`. No frame sees another frame's registers.
 
 ---
 
+## Macro System
+
+Macros are defined with `defmacro` and stored in a compile-time table
+(`g_macros[]` in `compiler.c`). Every call site is checked against this table
+before the special-form handlers run — macros take priority.
+
+Expansion is a single-level textual substitution of arguments into the body
+AST (`subst_node`). The result is compiled in place of the original call.
+Macro bodies are deep-cloned into arena storage so they survive across multiple
+expansion sites.
+
+`not`, `and`, `or`, `when`, `unless`, and all pair accessor macros (`cadr`,
+`list3`, etc.) are defined in `core.sel` rather than in the compiler.
+
+---
+
+## `core.selc` — Precompiled Standard Library
+
+At build time, `make` runs `./sel --compile-core core.selc`, which:
+
+1. Compiles `core.sel` from source (populating `g_functions[]` and `g_macros[]`).
+2. Serialises both tables to a binary file using the format in `serde.h`.
+
+At startup, `load_core()` reads `core.selc` with `fopen` and deserialises it
+directly into the global tables — no tokenising or compiling happens.
+
+**Binary format** (all integers little-endian):
+
+```
+"SELC"            4-byte magic
+uint32            version (= 1)
+uint32            function count
+[Function] × N    each: name, arity, param names, Chunk bytecode
+uint32            macro count
+[MacroDef] × M    each: name, arity, param names, body Node tree
+```
+
+Strings are length-prefixed (`uint32` + bytes). Node trees are tagged
+recursively (symbol / number / string-literal / list).
+
+If `core.selc` is absent the interpreter falls back to compiling `core.sel`
+from source. If it is present but corrupt it exits with an error.
+
+---
+
 ## Compiler Optimisations
 
-Nine optimisation passes are applied at compile time, in order:
+Eleven optimisation passes are applied at compile time, in order:
 
 ### 1. Constant Folding
 
@@ -283,7 +332,22 @@ carries the constant inline. This saves a `LOAD_CONST` + register.
 Calls in tail position emit `OP_TAIL_CALL` / `OP_TAIL_CALL_VAL`, which reuse
 the current frame. See [Tail Calls](tail-calls).
 
-### 9. Function Inlining
+### 9. Self-Tail-Call → JMP
+
+A recursive tail call to the **enclosing function** compiles to a parallel
+register move + unconditional `OP_JMP` back to the first body instruction,
+eliminating all frame and environment operations entirely.
+
+```lisp
+(fn sum (n acc)
+  (if (= n 0) acc (sum (- n 1) (+ acc n))))
+;                  ^^^ becomes: MOVE regs, JMP 0
+```
+
+The parallel move algorithm detects register cycles (e.g. swapping two
+parameters) and resolves them with a temporary register.
+
+### 10. Function Inlining
 
 Small, pure functions (body ≤ 8 real instructions, no nested calls or
 closures, no free-variable loads) are inlined at call sites. Inlining is
@@ -293,6 +357,13 @@ are also inlined.
 Eligibility guard: `f->compiled` must be `1`. This prevents inlining a
 function whose body is still being compiled (which would cause infinite
 recursion in the compiler).
+
+### 11. Inline Constant Propagation
+
+After inlining, the compiler scans the argument registers to find which ones
+were loaded from compile-time constants. It seeds a constant table with these
+known values and folds arithmetic on them during instruction emission, turning
+e.g. `(square 5)` into a single `LOAD_CONST 25`.
 
 ---
 

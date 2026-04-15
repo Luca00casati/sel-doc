@@ -32,19 +32,22 @@ compiler, and VM — is written in C with no external runtime dependencies.
 | **Strings** | ASCII single-quoted `'…'` and UTF-8 double-quoted `"…"` |
 | **Lists** | Linked cons cells — `cons`, `car`, `cdr` |
 | **Functions** | First-class, lexically-scoped closures |
-| **Tail calls** | Optimised — deep recursion uses O(1) stack frames |
+| **Macros** | Compile-time `defmacro` with textual substitution |
+| **Tail calls** | Self-tail-call → JMP; general TCO via `OP_TAIL_CALL` |
+| **Standard library** | `core.sel` — precompiled to `core.selc`, loaded at startup |
 | **REPL** | Interactive read-eval-print loop, multi-line aware |
 
 ---
 
 ## Quick navigation
 
-- [Getting Started](docs/getting-started) — build, REPL, run a file
+- [Getting Started](docs/getting-started) — build, REPL, run a file, flags
 - [Syntax](docs/syntax) — tokens, S-expressions, comments
 - [Types](docs/types) — integers, floats, bignum, strings, lists, closures, nil
-- [Special Forms](docs/special-forms) — `let`, `if`, `fn`, `and`, `or`, `not`
+- [Special Forms](docs/special-forms) — `if`, `fn`, `let`, `begin`, `defmacro`
 - [Operators](docs/operators) — arithmetic, comparison, bitwise, shift
 - [Built-in Functions](docs/builtins) — `cons`, `car`, `cdr`, `print`, `println`
+- [Standard Library](docs/stdlib) — `core.sel`: booleans, math, list functions
 - [Closures](docs/closures) — higher-order functions, captures, currying
 - [Tail Calls](docs/tail-calls) — TCO, tail-recursive patterns
-- [Internals](docs/internals) — compiler passes, bytecode, VM architecture
+- [Internals](docs/internals) — macro system, core.selc format, compiler passes, VM
