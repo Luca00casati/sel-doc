@@ -70,12 +70,12 @@ handled with arbitrary-precision arithmetic.
 
 sel has two string delimiters:
 
-| Delimiter | Encoding | Notes |
-|-----------|----------|-------|
-| `'…'` | ASCII only | Bytes > 127 are rejected at parse time |
-| `"…"` | UTF-8 | Full Unicode; validated at parse time |
+| Delimiter | Encoding | Backslash |
+|-----------|----------|-----------|
+| `'…'` | ASCII only | escape sequences interpreted; bytes > 127 rejected |
+| `"…"` | UTF-8 | **raw** — backslash has no special meaning |
 
-Both support the same escape sequences:
+`'...'` escape sequences:
 
 | Escape | Character |
 |--------|-----------|
@@ -89,10 +89,11 @@ Both support the same escape sequences:
 | `\xNN` | byte with hex value `NN` |
 
 ```lisp
-'hello'          ; ASCII string
-"Héllo wörld"    ; UTF-8 string
-"line1\nline2"   ; escape sequences work in both
-'\x41\x42\x43'  ; "ABC"
+'hello'           ; ASCII string
+'line1\nline2'    ; newline in single-quoted string
+'\x41\x42\x43'   ; "ABC"
+"café ☕"         ; raw UTF-8 — any Unicode, no escaping
+"C:\Users\name"  ; backslashes are literal
 ```
 
 ---

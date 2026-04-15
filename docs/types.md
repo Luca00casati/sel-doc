@@ -90,18 +90,25 @@ Arithmetic is **automatically widening**:
 
 ## Strings
 
-A string is a byte array. Single-quoted strings are ASCII; double-quoted strings
-are UTF-8.
+sel has two string literal syntaxes:
+
+| Syntax | Encoding | Backslash |
+|--------|----------|-----------|
+| `'…'` | ASCII | escape sequences interpreted (`\n`, `\t`, `\r`, `\\`, `\'`, `\"`, `\0`, `\xHH`) |
+| `"…"` | UTF-8 | **raw** — backslash has no special meaning |
 
 ```lisp
-'hello'
-"こんにちは"
-""          ; empty string
+'hello\nworld'     ; hello, newline, world  (escape interpreted)
+"hello\nworld"     ; hello\nworld literally  (raw)
+"café ☕"          ; any UTF-8 content
+""                 ; empty string
 ```
 
-Strings are not arrays — sel has no indexing or slicing operators yet. They are
-mainly useful as data to `print` and `println`, and as keys if passed to cons
-cells.
+Because `"…"` is raw, there is no way to embed a literal `"` inside one.
+Use `'...'` if you need to embed a double-quote via `\"`.
+
+Strings are not arrays — sel has no indexing or slicing operators. They are
+mainly useful as data to `print` and `println`, and as cons cell elements.
 
 ---
 

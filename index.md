@@ -29,7 +29,7 @@ compiler, and VM — is written in C with no external runtime dependencies.
 |---------|--------|
 | **Syntax** | Uniform S-expression syntax |
 | **Numbers** | Native `long`, `double`, arbitrary-precision bigint and bigfloat |
-| **Strings** | ASCII single-quoted `'…'` and UTF-8 double-quoted `"…"` |
+| **Strings** | `'…'` ASCII with escape sequences; `"…"` raw UTF-8 literal |
 | **Lists** | Linked cons cells — `cons`, `car`, `cdr` |
 | **Functions** | First-class, lexically-scoped closures |
 | **Macros** | Compile-time `defmacro` with textual substitution |
