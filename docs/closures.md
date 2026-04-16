@@ -176,12 +176,18 @@ as long as `odd?` is defined before `even?` is actually **called**.
 
 ## Implementation Notes
 
-At runtime, creating a closure (via `OP_MAKE_CLOSURE`) snapshots the current
-environment into the closure struct. When a closure is called (via
+At runtime, creating a closure (via `OP_MAKE_CLOSURE`) snapshots a subset of
+the current environment into the closure struct. When a closure is called (via
 `OP_CALL_VAL`), the callee environment is built by first loading all captured
 bindings, then layering the argument bindings on top — so parameters shadow
 captured variables with the same name.
 
-The compiler applies **escape analysis**: if a function body contains no inner
-`fn` expressions, its `let` bindings cannot be captured by any closure and
-`STORE_VAR` instructions are skipped entirely, leaving values only in registers.
+**Captured-variable trimming.** The compiler scans the compiled function body
+for `LOAD_VAR` instructions whose name is not a parameter. Only those names —
+the function's true free variables — are captured when `OP_MAKE_CLOSURE` runs.
+A closure defined inside a scope with many bindings captures only what it
+actually reads, not the whole environment.
+
+**Escape analysis.** If a function body contains no inner `fn` expressions, its
+`let` bindings cannot be captured by any closure and `STORE_VAR` instructions
+are skipped entirely, leaving values only in registers.

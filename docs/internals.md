@@ -162,7 +162,7 @@ All opcodes are in the `OpCode` enum in `vm.h`. Each instruction has:
 | `OP_TAIL_CALL` | Reuse current frame; `a` = function id |
 | `OP_TAIL_CALL_VAL` | Reuse current frame; `a` = register holding closure |
 | `OP_RET` | Pop frame; write `regs[dst]` into caller's `ret_dst` |
-| `OP_MAKE_CLOSURE` | `dst = new Closure(fn_id=a, captured_env=copy of cur_env)` |
+| `OP_MAKE_CLOSURE` | `dst = new Closure(fn_id=a, captured_env=free variables only)` |
 
 ### List
 
@@ -248,7 +248,7 @@ expansion sites.
 
 ## `core.selc` — Precompiled Standard Library
 
-At build time, `make` runs `./sel --compile-core core.selc`, which:
+At build time, `make` runs `./sel --compile core.sel core.selc`, which:
 
 1. Compiles `core.sel` from source (populating `g_functions[]` and `g_macros[]`).
 2. Serialises both tables to a binary file using the format in `serde.h`.
@@ -260,9 +260,10 @@ directly into the global tables — no tokenising or compiling happens.
 
 ```
 "SELC"            4-byte magic
-uint32            version (= 1)
+uint32            version (= 2)
 uint32            function count
-[Function] × N    each: name, arity, param names, Chunk bytecode
+[Function] × N    each: name, arity, param names,
+                        free_var_count, free_var_names, Chunk bytecode
 uint32            macro count
 [MacroDef] × M    each: name, arity, param names, body Node tree
 ```
@@ -270,14 +271,14 @@ uint32            macro count
 Strings are length-prefixed (`uint32` + bytes). Node trees are tagged
 recursively (symbol / number / string-literal / list).
 
-If `core.selc` is absent the interpreter falls back to compiling `core.sel`
-from source. If it is present but corrupt it exits with an error.
+If `core.selc` is absent or corrupt the interpreter exits with an error.
+Run `./sel --compile core.sel core.selc` to rebuild it.
 
 ---
 
 ## Compiler Optimisations
 
-Eleven optimisation passes are applied at compile time, in order:
+Fourteen optimisation passes are applied at compile time, in order:
 
 ### 1. Constant Folding
 
@@ -364,6 +365,64 @@ After inlining, the compiler scans the argument registers to find which ones
 were loaded from compile-time constants. It seeds a constant table with these
 known values and folds arithmetic on them during instruction emission, turning
 e.g. `(square 5)` into a single `LOAD_CONST 25`.
+
+### 12. Copy Propagation
+
+After the body is emitted, `peephole_chunk` runs a forward scan over every
+`MOVE r1, r0` instruction. It substitutes all subsequent reads of `r1` with
+`r0` until `r0` is overwritten. If all reads were replaced, the `MOVE` itself
+is marked dead and removed. The pass stops at backward jump edges (loop
+back-edges) to remain conservative.
+
+### 13. Dead Code Elimination
+
+`dce_chunk` runs a backwards fixed-point liveness analysis using `uint64_t`
+bitmaps (one bit per register). For each pure instruction (one with no
+side effects — arithmetic, loads, moves, closure creation), if the destination
+register is not live at the instruction's exit point, the instruction is
+removed. This cleans up registers computed during inlining that are never
+read in the live branch taken at runtime.
+
+### 14. Captured-Variable Trimming
+
+After DCE, the compiler scans the finished chunk for `OP_LOAD_VAR`
+instructions whose variable name is not in the function's parameter list.
+These are the function's **free variables** — the only names that need to be
+captured from the enclosing environment. The list is stored on the `Function`
+struct and used by `OP_MAKE_CLOSURE` at runtime: instead of copying the
+entire current environment, only the named bindings are snapshotted.
+
+```lisp
+(let a 1) (let b 2) (let c 3) (let d 4) (let e 5)
+(let f (fn (x) (+ x c)))   ; captured env = {c: 3} only, not {a b c d e}
+```
+
+The trimmed list is serialised into `core.selc` so the optimisation applies
+to standard-library closures loaded at startup too.
+
+---
+
+## VM Type Specialisation
+
+Every arithmetic, comparison, and bitwise opcode checks whether both operands
+are **tagged integers** (`data == NULL`, `is_float == 0`, no closure, no cons)
+before touching the float or bigint slow paths:
+
+```c
+#define IS_INT(s) ((s).data == NULL && !(s).is_float && !(s).closure && !(s).cons)
+```
+
+When `IS_INT` is true for all register inputs, the value is read directly from
+`.ival` — no parsing, no function call, no type-dispatch chain. This is the
+common case for integer-heavy programs.
+
+Compile-time integer constants (immediates in `*_IMM` instructions, folded
+constants in `OP_LOAD_CONST`) are stored as tagged integers, so `IS_INT` is
+always true for them without any runtime check.
+
+Boolean results (`OP_LT`, `OP_EQ`, `OP_NOT`, and their IMM variants) are also
+emitted as tagged integers (`ival = 0` or `1`), so a comparison feeding
+directly into `OP_JMP_IF_FALSE` hits the integer fast path.
 
 ---
 
