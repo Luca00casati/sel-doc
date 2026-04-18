@@ -37,7 +37,7 @@ tokenizer.c  ──  AST (Node tree: NODE_NUMBER / NODE_SYMBOL / NODE_LIST)
 compiler.c   ──  Chunk (array of Instructions + register count)
     │
     ▼
-vm.c         ──  String (result value)
+vm.c         ──  Val (result value)
 ```
 
 ---
@@ -51,39 +51,32 @@ vm.c         ──  String (result value)
 | `vm.c` / `vm.h` | Bytecode interpreter, function registry, emit helpers, serialization |
 | `main.c` | REPL, file runner, core loading |
 | `serde.h` | Shared binary read/write primitives for `core.selc` serialization |
-| `sel_string.h` / `sel_string.c` | Tagged `String` value type |
+| `sel_string.h` / `sel_string.c` | NaN-boxed `Val` type and heap object definitions |
 | `bigint.c` / `bigint.h` | Arbitrary-precision integer arithmetic |
 | `bigfloat.c` / `bigfloat.h` | Arbitrary-precision float arithmetic |
 | `arena.c` / `arena.h` | Bump-pointer arena allocator |
 
 ---
 
-## Value Type — `String`
+## Value Type — `Val`
 
-Every sel runtime value is a `String` struct (`sel_string.h`):
+Every sel runtime value is a NaN-boxed `uint64_t` (`Val` in `sel_string.h`).
+The top 16 bits select the kind; the lower 48 carry the payload.
 
-```c
-typedef struct {
-    char*           data;     /* NULL → numeric / closure / cons */
-    int             size;
-    long            ival;     /* tagged integer when data==NULL, is_float==0 */
-    struct Closure* closure;  /* non-NULL → closure value */
-    struct Cons*    cons;     /* non-NULL → cons cell */
-    double          fval;     /* tagged double when data==NULL, is_float!=0 */
-    int             is_float; /* non-zero: tagged double or bigfloat string */
-} String;
+```
+v < 0xFFFC000000000000   →  IEEE 754 double (normal / subnormal / ±inf)
+bits[63:48] == 0xFFFC    →  48-bit signed integer (payload sign-extended from bit 47)
+bits[63:48] == 0xFFFD    →  Cons*    (lower 48 bits = pointer)
+bits[63:48] == 0xFFFE    →  Closure* (lower 48 bits = pointer)
+bits[63:48] == 0xFFFF    →  StrObj*  (lower 48 bits = pointer)
 ```
 
-Dispatch rules:
+`VAL_NIL` and `VAL_FALSE` are both `mk_int(0)` — integer zero doubles as the
+nil/false sentinel. `VAL_TRUE` is `mk_int(1)`.
 
-| `data` | `closure` | `cons` | `is_float` | Kind |
-|--------|-----------|--------|------------|------|
-| NULL | NULL | NULL | 0 | Tagged integer (`ival`) |
-| NULL | NULL | NULL | ≠0 | Tagged double (`fval`) |
-| ≠NULL | NULL | NULL | 0 | String / bigint bytes |
-| ≠NULL | NULL | NULL | ≠0 | Bigfloat decimal string |
-| NULL | ≠NULL | NULL | — | Closure |
-| NULL | NULL | ≠NULL | — | Cons cell |
+Heap objects (`StrObj`, `Cons`, `Closure`) start with a `GCObj` header for the
+mark-and-sweep GC. `StrObj` covers flat strings, bigfloat decimal strings, and
+lazy rope nodes (two child `Val`s joined on demand).
 
 ---
 
@@ -92,7 +85,7 @@ Dispatch rules:
 All opcodes are in the `OpCode` enum in `vm.h`. Each instruction has:
 - `op` — the opcode
 - `dst`, `a`, `b` — register indices (overloaded for jumps and calls — see below)
-- `value` — a `String` literal (for LOAD_CONST, LOAD_VAR, STORE_VAR, IMM ops)
+- `value` — a `Val` literal (for LOAD_CONST, LOAD_VAR, STORE_VAR, IMM ops)
 - `arg_regs` / `argc` — argument register array (for CALL variants)
 - `line` — source line number
 
@@ -194,39 +187,74 @@ typedef struct {
     int    ip;
     int    regs_base;  /* offset into the global register pool */
     int    ret_dst;    /* destination register in caller's frame */
+    int    env_base;   /* index into vm_env_pool; -1 = not pool-owned */
 } VMFrame;
 ```
 
+### Function metadata
+
+```c
+typedef struct {
+    Chunk*  chunk;
+    int     arity;
+    Val     name;
+    Val*    param_names;
+    int     compiled;         /* 1 once body is fully compiled */
+    Val*    free_var_names;
+    int     free_var_count;
+    int     is_variadic;
+    Val     rest_param;
+    int     has_inner_fn;     /* 1 → body contains OP_MAKE_CLOSURE */
+    int     entry_ip;         /* first instruction after param LOAD_VARs */
+    int*    param_regs;       /* param_regs[i] = destination register for param i */
+} Function;
+```
+
+`entry_ip` and `param_regs` are computed once after compilation (or
+deserialization) by `vm_derive_entry_info`, which scans the leading
+`OP_LOAD_VAR` instructions that match parameter names.
+
 ### Pools
 
-| Pool | Max size | Allocation |
-|------|----------|------------|
-| Frame stack (`vm_frame_stack`) | 200,000 frames | `realloc`-grown |
-| Register pool (`vm_reg_pool`) | 2,000,000 slots | `realloc`-grown |
-| Per-frame env (`vm_envs`) | One per frame | Arena-allocated per call |
+| Pool | Grows via | Notes |
+|------|-----------|-------|
+| Frame stack (`vm_frame_stack`) | `realloc` | one entry per live call |
+| Register pool (`vm_reg_pool`) | `realloc` | flat array; each frame gets a contiguous slice at `regs_base` |
+| Env pool (`vm_env_pool`) | `realloc` | LIFO `Binding` array; pure functions allocate from here |
+| Per-frame env (`vm_envs`) | arena | parallel array of `Env` structs, one per frame slot |
 
-Register pools are **flat arrays**. Each frame gets a contiguous slice starting
-at `regs_base`. No frame sees another frame's registers.
+All pools grow lazily via `realloc`. After an env-pool realloc, all active
+pool-owned `Env.vars` pointers are fixed up using the stored `env_base` index.
 
 ### Call Dispatch
 
-`OP_CALL`:
-1. Advance caller `ip` past the `CALL` instruction.
-2. Grow pools if needed.
-3. Push a new `VMFrame` at `frame_top + 1`.
-4. Arena-allocate a callee `Env`; bind argument registers by name.
-5. Switch `cur`, `cur_env`, `regs` to the callee frame.
+**`OP_CALL` / `OP_CALL_VAL`** — three dispatch paths, chosen at call time:
 
-`OP_TAIL_CALL`:
-1. Reuse the **current** frame (update `chunk`, reset `ip = 0`).
-2. Reset `cur_env`; rebind arguments.
-3. No frame growth — O(1) stack.
+1. **Fast path** (`!has_inner_fn && !is_variadic && free_var_count == 0 &&
+   captured_env.count == 0 && entry_ip > 0`): arguments are written directly
+   into the callee's registers at the positions recorded in `param_regs`; `ip`
+   jumps straight to `entry_ip`, skipping the `LOAD_VAR` preamble entirely.
+   No environment is allocated.
 
-`OP_RET`:
+2. **Pool path** (`!has_inner_fn`): a slice of `vm_env_pool` is used for the
+   callee's `Env`. On `OP_RET` the pool top is decremented by `capacity` — no
+   `free` call.
+
+3. **Malloc path** (`has_inner_fn`): the callee's `Env` is `malloc`'d and
+   `free`'d on `OP_RET`. Required when the function body contains
+   `OP_MAKE_CLOSURE`, because closures capture named bindings via `env_get` at
+   creation time.
+
+**`OP_TAIL_CALL` / `OP_TAIL_CALL_VAL`**: the current frame is reused (no push).
+The same three-path dispatch applies; the register slice is reset in place and
+the env is rebuilt for the new callee.
+
+**`OP_RET`**:
 1. Write return value into caller's `regs[ret_dst]`.
-2. Shrink `regs_top` back to caller's `regs_base + caller->chunk->reg_count`.
-3. Decrement `frame_top`.
-4. Switch `cur`, `cur_env`, `regs` back to the caller.
+2. Shrink `regs_top` back to caller's slice end.
+3. Release callee env: `free` for malloc path, pool top decrement for pool path,
+   nothing for fast path.
+4. Decrement `frame_top`; restore `cur`, `cur_env`, `regs` to caller.
 
 ---
 
@@ -270,6 +298,11 @@ uint32            macro count
 
 Strings are length-prefixed (`uint32` + bytes). Node trees are tagged
 recursively (symbol / number / string-literal / list).
+
+After deserialization, `has_inner_fn` is re-derived by scanning each function's
+bytecode for `OP_MAKE_CLOSURE` (not `OP_STORE_VAR` — anonymous inner functions
+emit no `STORE_VAR` when the enclosing function has no `let` bindings).
+`entry_ip` and `param_regs` are re-derived by `vm_derive_entry_info`.
 
 If `core.selc` is absent or corrupt the interpreter exits with an error.
 Run `./sel --compile core.sel core.selc` to rebuild it.
@@ -402,27 +435,57 @@ to standard-library closures loaded at startup too.
 
 ---
 
-## VM Type Specialisation
+## VM Runtime Optimisations
+
+### Env Pool
+
+By default, each function call would `malloc` a `Binding` array for its
+environment and `free` it on return. For functions that contain no
+`OP_MAKE_CLOSURE` (`has_inner_fn == 0`), the environment is write-once at
+call time and read-only thereafter — it never needs to outlive the call.
+
+For these functions the VM allocates from `vm_env_pool`, a flat `Binding`
+array that acts as a LIFO stack mirroring the call stack. On return, the pool
+top is simply decremented by the env's capacity — no allocator involvement.
+After a pool `realloc`, all active pool-owned `Env.vars` pointers are fixed
+up using the `env_base` index stored in each `VMFrame`.
+
+### Direct Register Passing (Fast Path)
+
+For **pure** functions — those satisfying `!has_inner_fn && !is_variadic &&
+free_var_count == 0` — the entire environment round-trip can be eliminated.
+
+At compile/load time, `vm_derive_entry_info` scans the leading `OP_LOAD_VAR`
+instructions to record which register each parameter lands in (`param_regs`)
+and the index of the first non-preamble instruction (`entry_ip`).
+
+At call time the VM writes arguments directly into those registers and sets
+`ip = entry_ip`, skipping both the env allocation and the `LOAD_VAR` preamble
+entirely. For `OP_TAIL_CALL` variants the register slice is reset in place and
+no frame manipulation is needed at all.
+
+---
+
+## VM Integer Fast Path
 
 Every arithmetic, comparison, and bitwise opcode checks whether both operands
-are **tagged integers** (`data == NULL`, `is_float == 0`, no closure, no cons)
-before touching the float or bigint slow paths:
+are **tagged integers** before touching the float or bigint slow paths:
 
 ```c
-#define IS_INT(s) ((s).data == NULL && !(s).is_float && !(s).closure && !(s).cons)
+static inline int val_is_int(Val v) { return (v >> 48) == 0xFFFC; }
 ```
 
-When `IS_INT` is true for all register inputs, the value is read directly from
-`.ival` — no parsing, no function call, no type-dispatch chain. This is the
-common case for integer-heavy programs.
+When `val_is_int` is true for all inputs, the value is read directly from
+the low 48 bits via `val_int()` — no parsing, no function call, no
+type-dispatch chain. This is the common case for integer-heavy programs.
 
 Compile-time integer constants (immediates in `*_IMM` instructions, folded
-constants in `OP_LOAD_CONST`) are stored as tagged integers, so `IS_INT` is
-always true for them without any runtime check.
+constants in `OP_LOAD_CONST`) are stored as tagged integers, so the check is
+always `true` for them without any runtime branch.
 
 Boolean results (`OP_LT`, `OP_EQ`, `OP_NOT`, and their IMM variants) are also
-emitted as tagged integers (`ival = 0` or `1`), so a comparison feeding
-directly into `OP_JMP_IF_FALSE` hits the integer fast path.
+emitted as tagged integers (`mk_int(0)` or `mk_int(1)`), so a comparison
+feeding directly into `OP_JMP_IF_FALSE` hits the integer fast path.
 
 ---
 
