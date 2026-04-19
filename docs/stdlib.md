@@ -66,6 +66,13 @@ Fixed-arity list constructors:
 (list4 a b c d)
 ```
 
+Variadic constructor — takes any number of arguments:
+
+```lisp
+(list 1 2 3 4 5)   ; => (1 2 3 4 5)
+(list)             ; => 0  (nil)
+```
+
 ---
 
 ## Math
@@ -121,4 +128,75 @@ Fixed-arity list constructors:
 
 (foldl (fn (acc x) (+ acc x)) 0 (list3 1 2 3))
 ; => 6
+```
+
+---
+
+## Strings
+
+### Predicates and byte access
+
+```
+(str-empty? s)          ; 1 if s has byte length 0
+```
+
+### UTF-8 helpers
+
+```
+(str-cp-bytes b)        ; byte width of a UTF-8 sequence given its leading byte (1–4)
+(str-decode-at s i)     ; Unicode code point starting at byte index i
+(str-char-len s)        ; number of code points (not bytes) in s
+(str-char-ref s n)      ; code point at character index n  (O(n))
+(str-code-points s)     ; list of all code points in s
+```
+
+```lisp
+(str-char-len "café")        ; => 4
+(str-char-ref "café" 3)      ; => 233  (é)
+(str-code-points "hi")       ; => (104 . (105 . 0))
+```
+
+### Joining and splitting
+
+```
+(str-join sep lst)      ; concatenate list of strings with separator
+(str-split-nl s)        ; split s on newlines; returns list of non-empty lines
+```
+
+```lisp
+(str-join ", " (list "a" "b" "c"))   ; => "a, b, c"
+(str-split-nl "foo\nbar\nbaz")       ; => ("foo" "bar" "baz")
+```
+
+---
+
+## I/O
+
+I/O functions are implemented in `core.sel` using the FFI layer.
+
+```
+(open path mode)   ; fopen(path, mode) → file pointer (integer)
+(close port)       ; fclose(port) → 0
+(write port val)   ; fputs(val, port) + newline → val
+```
+
+```lisp
+(let fp (open "/tmp/out.txt" "w"))
+(write fp "hello")
+(close fp)
+```
+
+```
+(read-line)        ; read all of stdin; return list of lines (strings)
+(read fp)          ; read entire file fp; return list of lines
+```
+
+```lisp
+(let lines (read-line))           ; block until EOF on stdin
+(for-each println lines)
+
+(let fp (open "/etc/hostname" "r"))
+(let lines (read fp))
+(close fp)
+(println (car lines))
 ```

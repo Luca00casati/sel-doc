@@ -35,8 +35,8 @@ This produces two files that must be kept together:
 | `core.selc` | precompiled standard library bytecode |
 
 `core.selc` is compiled from `core.sel` by the binary itself as part of
-`make`. If it is missing at runtime the interpreter falls back to compiling
-`core.sel` from source automatically.
+`make`. If it is missing at runtime the interpreter exits with an error; run
+`./sel --compile core.sel core.selc` to rebuild it.
 
 ---
 
@@ -109,11 +109,19 @@ Result: 2
 | Flag | Effect |
 |------|--------|
 | `--no-core` | Skip loading the standard library |
-| `--compile-core core.selc` | Compile `core.sel` → `core.selc` and exit |
+| `--no-jit` | Disable the JIT compiler; run purely in the interpreter |
+| `--compile <input.sel> [output.selc]` | Compile a `.sel` file to bytecode and exit; output defaults to `<input>.selc` |
+| `--dump-ast <file>` | Print the AST of a file and exit (no execution) |
+| `--dump-inst <file>` | Compile a file and print its bytecode disassembly; useful for inspecting compiler output |
 
 ```sh
-./sel --no-core program.sel       # bare interpreter, no stdlib
-./sel --compile-core core.selc    # regenerate bytecode after editing core.sel
+./sel --no-core program.sel        # bare interpreter, no stdlib
+./sel --no-jit program.sel         # interpreter only, no JIT
+./sel --compile core.sel           # → core.selc
+./sel --compile mylib.sel          # → mylib.selc
+./sel --compile mylib.sel out.selc # explicit output name
+./sel --dump-ast program.sel       # inspect parse tree
+./sel --dump-inst program.sel      # inspect bytecode
 ```
 
 ---

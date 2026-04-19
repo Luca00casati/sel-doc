@@ -55,6 +55,7 @@ vm.c         ──  Val (result value)
 | `bigint.c` / `bigint.h` | Arbitrary-precision integer arithmetic |
 | `bigfloat.c` / `bigfloat.h` | Arbitrary-precision float arithmetic |
 | `arena.c` / `arena.h` | Bump-pointer arena allocator |
+| `jit.c` / `jit.h` | x86-64 JIT compiler (lazy, per-function) |
 
 ---
 
@@ -172,6 +173,37 @@ All opcodes are in the `OpCode` enum in `vm.h`. Each instruction has:
 | `OP_PRINT` | print `a`; `dst = a` |
 | `OP_PRINTLN` | print `a` + newline; `dst = a` |
 
+### Strings
+
+| Opcode | Effect |
+|--------|--------|
+| `OP_STR_LEN` | `dst = byte-length(a)` |
+| `OP_STR_CONCAT` | `dst = a ++ b` |
+| `OP_STR_REF` | `dst = byte-at(a, b)` |
+| `OP_STR_SLICE` | `dst = bytes a[b .. b+arg_regs[2]]` |
+| `OP_NUM_TO_STR` | `dst = decimal string of a` |
+| `OP_STR_TO_NUM` | `dst = parse number from a; 0 on failure` |
+| `OP_CHR` | `dst = UTF-8 string for codepoint a` |
+
+### Hash Maps
+
+| Opcode | Effect |
+|--------|--------|
+| `OP_HASH_MAKE` | `dst = new empty HashMap` |
+| `OP_HASH_SET` | `arg_regs = [map, key, val]; dst = map` (mutates in place) |
+| `OP_HASH_GET` | `dst = map[key]`; `a=map b=key`; 0 if absent |
+| `OP_HASH_HAS` | `dst = 0/1`; `a=map b=key` |
+| `OP_HASH_DEL` | delete key; `a=map b=key`; `dst = map` |
+| `OP_HASH_KEYS` | `dst = linked list of live keys`; `a=map` |
+
+### Misc
+
+| Opcode | Effect |
+|--------|--------|
+| `OP_CLOCK` | `dst = monotonic microseconds` |
+| `OP_ERROR` | print `a` to stderr; `exit(1)` |
+| `OP_FFI_PREP` | `dst = FfiFunc(name=value, types from arg_regs)`; looks up C symbol |
+
 ---
 
 ## VM Architecture
@@ -207,6 +239,7 @@ typedef struct {
     int     has_inner_fn;     /* 1 → body contains OP_MAKE_CLOSURE */
     int     entry_ip;         /* first instruction after param LOAD_VARs */
     int*    param_regs;       /* param_regs[i] = destination register for param i */
+    JitCode* jit_code;        /* non-NULL when JIT-compiled */
 } Function;
 ```
 
@@ -486,6 +519,68 @@ always `true` for them without any runtime branch.
 Boolean results (`OP_LT`, `OP_EQ`, `OP_NOT`, and their IMM variants) are also
 emitted as tagged integers (`mk_int(0)` or `mk_int(1)`), so a comparison
 feeding directly into `OP_JMP_IF_FALSE` hits the integer fast path.
+
+---
+
+## JIT Compiler
+
+sel includes an x86-64 JIT compiler (`jit.c` / `jit.h`) that translates
+bytecode functions to native machine code on first call.
+
+### Eligibility
+
+A function is JIT-compiled if all of the following hold:
+
+- `entry_ip > 0` — the parameter-preamble scan succeeded
+- `!is_variadic` — fixed arity only
+- `free_var_count == 0` — no captured variables
+- `!has_inner_fn` — no `OP_MAKE_CLOSURE` in the body
+
+Functions that capture variables or create closures stay in the interpreter.
+
+### Compiled type signature
+
+```c
+typedef Val (*JitFn)(Val* regs);
+```
+
+The JIT entry point receives a pre-allocated register array (one `Val` per
+register slot). Argument values have already been written into the correct
+register positions by the caller. The function returns its result as a `Val`.
+
+### Memory model
+
+Code is allocated with `mmap(PROT_READ|PROT_WRITE)`, machine code is emitted
+into the buffer, then `mprotect(PROT_READ|PROT_EXEC)` makes it executable. The
+buffer is never freed (functions live for the lifetime of the process).
+
+### Supported opcodes
+
+The JIT handles: `OP_LOAD_CONST`, `OP_MOVE`, `OP_ADD`, `OP_SUB`, `OP_MUL`,
+`OP_LT`, `OP_EQ`, `OP_ADD_IMM`, `OP_SUB_IMM`, `OP_MUL_IMM`, `OP_LT_IMM`,
+`OP_GT_IMM`, `OP_EQ_IMM`, `OP_JMP`, `OP_JMP_IF_FALSE`, `OP_CALL`,
+`OP_CALL_VAL`, `OP_TAIL_CALL`, `OP_TAIL_CALL_VAL`, `OP_RET`, and `OP_HALT`.
+
+Opcodes not in this list cause the JIT compilation attempt to abort; the
+function falls back to the interpreter.
+
+### Lazy compilation
+
+The first time an eligible function is called via `OP_CALL`, `jit_compile` is
+invoked. Subsequent calls skip compilation via the `if (fn->jit_code) return`
+guard. At REPL startup all already-loaded core library functions are compiled
+eagerly via `jit_compile_all()`.
+
+### Calling convention
+
+Register-to-register operations are done in `rax`/`rcx`. The register file
+pointer is kept in `rdi` throughout the function. Calls to other functions that
+fall back to the interpreter use `vm_jit_call(fn_id, args, argc)`.
+
+### Disabling the JIT
+
+Pass `--no-jit` on the command line to disable JIT compilation entirely. All
+functions run through the interpreter.
 
 ---
 

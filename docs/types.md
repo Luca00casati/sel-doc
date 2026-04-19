@@ -18,7 +18,7 @@ nav_order: 4
 
 ## Overview
 
-sel is dynamically typed. Every value is a `String` — a tagged union that can
+sel is dynamically typed. Every value is a `Val` — a tagged union that can
 hold one of the following kinds:
 
 | Kind | Description |
@@ -30,6 +30,8 @@ hold one of the following kinds:
 | **String** | Byte array (ASCII or UTF-8) |
 | **Cons** | A pair `(car . cdr)`, each element is any value |
 | **Closure** | A function + captured environment |
+| **Hash map** | Mutable key→value store (string or integer keys) |
+| **FFI function** | Callable wrapper around a C library symbol |
 | **Nil** | The zero/empty value |
 
 ---
@@ -107,8 +109,9 @@ sel has two string literal syntaxes:
 Because `"…"` is raw, there is no way to embed a literal `"` inside one.
 Use `'...'` if you need to embed a double-quote via `\"`.
 
-Strings are not arrays — sel has no indexing or slicing operators. They are
-mainly useful as data to `print` and `println`, and as cons cell elements.
+Strings support several built-in operations: byte length, byte indexing, slicing,
+concatenation, and conversion to/from numbers. See [Built-in Functions](builtins)
+for the full list.
 
 ---
 
@@ -171,6 +174,58 @@ nil         ; 0
 
 ---
 
+## Hash Maps
+
+A hash map is a mutable key→value store. Keys must be strings or integers;
+values can be any `Val`. Hash maps are **always truthy**.
+
+```lisp
+(let h (hash-make))
+(hash-set h "x" 10)
+(hash-set h "y" 20)
+(hash-get h "x")          ; => 10
+(hash-has h "z")          ; => 0
+(hash-keys h)             ; => ("x" . ("y" . 0))  (order unspecified)
+(hash-del h "x")
+(hash-has h "x")          ; => 0
+```
+
+Hash maps support integer keys too:
+
+```lisp
+(let counts (hash-make))
+(hash-set counts 42 1)
+(hash-get counts 42)   ; => 1
+```
+
+See [Built-in Functions](builtins#hash-maps) for the full API.
+
+---
+
+## FFI Functions
+
+An FFI function is a callable wrapper around a symbol resolved from the
+dynamic linker. It is created with the `ffi` built-in and called like any
+other function.
+
+```lisp
+(let strlen (ffi "strlen" "long" "string"))
+(strlen "hello")   ; => 5
+```
+
+FFI functions are **truthy** values and are first-class: they can be stored in
+variables, passed as arguments, and stored in hash maps.
+
+```lisp
+(let h (hash-make))
+(hash-set h "puts" (ffi "puts" "int" "string"))
+((hash-get h "puts") "hi")
+```
+
+See [Built-in Functions](builtins#ffi) for supported type strings and usage.
+
+---
+
 ## Truthiness
 
 Falsy values:
@@ -179,7 +234,7 @@ Falsy values:
 - The empty string `''` / `""`
 
 Everything else — any nonzero integer, any nonzero float, any non-empty string,
-any cons cell, any closure — is **truthy**.
+any cons cell, any closure, any hash map, any FFI function — is **truthy**.
 
 ```lisp
 (if 0 'yes' 'no')     ; no
