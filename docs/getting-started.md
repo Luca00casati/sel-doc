@@ -18,25 +18,31 @@ nav_order: 2
 
 ## Building
 
-sel has no dependencies beyond a C99-compatible compiler and GNU binutils.
-Clone the repository and run `make`:
+Build-time requirements:
+
+- `gcc` (for `libgccjit.h` / `libgccjit.so.0` — ships with GCC itself)
+- standard C library + `libm`
+- `make`
+
+Clone with submodules (vendored [linenoise](https://github.com/antirez/linenoise)
+lives under `linenoise/`) and run `make`:
 
 ```sh
-git clone https://github.com/Luca00casati/sel.git
+git clone --recurse-submodules https://github.com/Luca00casati/sel.git
 cd sel
 make
 ```
 
-This produces two files that must be kept together:
+If you already cloned without `--recurse-submodules`, initialise the
+submodule first:
 
-| File | Purpose |
-|------|---------|
-| `sel` | the interpreter binary |
-| `core.selc` | precompiled standard library bytecode |
+```sh
+git submodule update --init
+```
 
-`core.selc` is compiled from `core.sel` by the binary itself as part of
-`make`. If it is missing at runtime the interpreter exits with an error; run
-`./sel --compile core.sel core.selc` to rebuild it.
+`make` produces a single `sel` binary. The standard library (`core.sel`)
+is a plain source file — sel loads it on demand via `(load "core.sel")`,
+so the working directory needs access to it.
 
 ---
 
@@ -68,8 +74,14 @@ sel> (add 3 4)
 7
 ```
 
-The standard library is loaded automatically, so all core macros and functions
-(`map`, `filter`, `list3`, etc.) are available immediately.
+Load the standard library explicitly when you need it:
+
+```
+sel> (load "core.sel")
+```
+
+After that, core macros and functions (`map`, `filter`, `list3`, etc.) are
+available.
 
 State persists across expressions — bindings and functions defined with `let`
 and `fn` remain available for the rest of the session.
@@ -108,18 +120,12 @@ Result: 2
 
 | Flag | Effect |
 |------|--------|
-| `--no-core` | Skip loading the standard library |
 | `--no-jit` | Disable the JIT compiler; run purely in the interpreter |
-| `--compile <input.sel> [output.selc]` | Compile a `.sel` file to bytecode and exit; output defaults to `<input>.selc` |
 | `--dump-ast <file>` | Print the AST of a file and exit (no execution) |
 | `--dump-inst <file>` | Compile a file and print its bytecode disassembly; useful for inspecting compiler output |
 
 ```sh
-./sel --no-core program.sel        # bare interpreter, no stdlib
 ./sel --no-jit program.sel         # interpreter only, no JIT
-./sel --compile core.sel           # → core.selc
-./sel --compile mylib.sel          # → mylib.selc
-./sel --compile mylib.sel out.selc # explicit output name
 ./sel --dump-ast program.sel       # inspect parse tree
 ./sel --dump-inst program.sel      # inspect bytecode
 ```

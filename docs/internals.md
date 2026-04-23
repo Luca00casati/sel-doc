@@ -48,14 +48,16 @@ vm.c         ──  Val (result value)
 |------|---------------|
 | `tokenizer.c` / `tokenizer.h` | Lexing and AST construction |
 | `compiler.c` / `compiler.h` | AST → bytecode; macro system; all compile-time optimisations |
-| `vm.c` / `vm.h` | Bytecode interpreter, function registry, emit helpers, serialization |
-| `main.c` | REPL, file runner, core loading |
-| `serde.h` | Shared binary read/write primitives for `core.selc` serialization |
+| `vm.c` / `vm.h` | Bytecode interpreter, function registry, emit helpers |
+| `main.c` | REPL (via linenoise), file runner |
 | `sel_string.h` / `sel_string.c` | NaN-boxed `Val` type and heap object definitions |
 | `bigint.c` / `bigint.h` | Arbitrary-precision integer arithmetic |
 | `bigfloat.c` / `bigfloat.h` | Arbitrary-precision float arithmetic |
 | `arena.c` / `arena.h` | Bump-pointer arena allocator |
-| `jit.c` / `jit.h` | x86-64 JIT compiler (lazy, per-function) |
+| `gc.c` / `gc.h` | Mark-sweep GC for heap-allocated values |
+| `jit.c` / `jit.h` | libgccjit-backed JIT + FFI trampoline builder |
+| `ffi_syms.c` / `ffi_syms.h` | Compile-time FFI symbol table (+ dlsym fallback) |
+| `linenoise/` | Vendored line-editing library (git submodule) |
 
 ---
 
@@ -524,19 +526,23 @@ feeding directly into `OP_JMP_IF_FALSE` hits the integer fast path.
 
 ## JIT Compiler
 
-sel includes an x86-64 JIT compiler (`jit.c` / `jit.h`) that translates
-bytecode functions to native machine code on first call.
+sel's JIT (`jit.c` / `jit.h`) translates bytecode functions to native code
+via **libgccjit** — GCC's backend exposed as a C library. Each compile
+creates a fresh `gcc_jit_context`, builds typed IR, asks gccjit to compile,
+and keeps the resulting `gcc_jit_result*` alive for the function's
+lifetime (it owns the native code).
 
 ### Eligibility
 
-A function is JIT-compiled if all of the following hold:
+A function is JIT-compiled only if all of these hold:
 
 - `entry_ip > 0` — the parameter-preamble scan succeeded
 - `!is_variadic` — fixed arity only
 - `free_var_count == 0` — no captured variables
 - `!has_inner_fn` — no `OP_MAKE_CLOSURE` in the body
 
-Functions that capture variables or create closures stay in the interpreter.
+Functions that capture variables or create closures stay in the
+interpreter.
 
 ### Compiled type signature
 
@@ -544,43 +550,90 @@ Functions that capture variables or create closures stay in the interpreter.
 typedef Val (*JitFn)(Val* regs);
 ```
 
-The JIT entry point receives a pre-allocated register array (one `Val` per
-register slot). Argument values have already been written into the correct
-register positions by the caller. The function returns its result as a `Val`.
+The JIT entry point receives a pre-allocated register array (one `Val`
+per register slot). Argument values are already written into the correct
+register positions by the caller. The function returns its result as a
+`Val`.
 
-### Memory model
+### Heat policy
 
-Code is allocated with `mmap(PROT_READ|PROT_WRITE)`, machine code is emitted
-into the buffer, then `mprotect(PROT_READ|PROT_EXEC)` makes it executable. The
-buffer is never freed (functions live for the lifetime of the process).
+Compilation is lazy and amortised over many calls, because the gccjit
+compile pipeline (GCC middle/back-end → `as` → `ld` → dlopen) costs
+~30–40 ms per function:
+
+- `call_count` — incremented on every `OP_CALL` to the function.
+- `loop_count` — incremented on every **backward** `OP_JMP` /
+  `OP_JMP_IF_FALSE` while the function is on top of the VM stack
+  (tracked via `VMFrame.fn`).
+
+When either counter reaches `JIT_HEAT_THRESHOLD` (default `10000`),
+`jit_compile(f)` runs. Subsequent calls use the native entry point
+directly.
+
+Pass `--no-jit` on the command line to disable JIT entirely.
 
 ### Supported opcodes
 
 The JIT handles: `OP_LOAD_CONST`, `OP_MOVE`, `OP_ADD`, `OP_SUB`, `OP_MUL`,
-`OP_LT`, `OP_EQ`, `OP_ADD_IMM`, `OP_SUB_IMM`, `OP_MUL_IMM`, `OP_LT_IMM`,
-`OP_GT_IMM`, `OP_EQ_IMM`, `OP_JMP`, `OP_JMP_IF_FALSE`, `OP_CALL`,
-`OP_CALL_VAL`, `OP_TAIL_CALL`, `OP_TAIL_CALL_VAL`, `OP_RET`, and `OP_HALT`.
+`OP_LT`, `OP_EQ`, `OP_NOT`, `OP_ADD_IMM`, `OP_SUB_IMM`, `OP_MUL_IMM`,
+`OP_LT_IMM`, `OP_GT_IMM`, `OP_EQ_IMM`, `OP_JMP`, `OP_JMP_IF_FALSE`,
+`OP_CALL`, `OP_TAIL_CALL`, `OP_RET`, `OP_CONS`, `OP_CAR`, `OP_CDR`,
+`OP_HASH_GET`, `OP_HASH_SET`, `OP_STR_CONCAT`. Anything else causes the
+compile attempt to abort and the function stays interpreted.
 
-Opcodes not in this list cause the JIT compilation attempt to abort; the
-function falls back to the interpreter.
+### Fast and slow paths
 
-### Lazy compilation
+Tagged-int arithmetic is inlined: for `OP_ADD`, both operands are checked
+for the int tag, sign-extended from 48 bits, added, and the result's fit
+in 48 bits is verified. On any failure (non-int, or overflow), a slow-path
+C function (`jit_slow_add` → `vm_arith_add`) is called with the boxed
+`Val`s. Same pattern for `SUB`, `MUL`, `LT`, `EQ`, `GT`, and their `_IMM`
+variants. `OP_MUL`'s overflow check calls `jit_smul_ov`, a tiny wrapper
+around `__builtin_smull_overflow`.
 
-The first time an eligible function is called via `OP_CALL`, `jit_compile` is
-invoked. Subsequent calls skip compilation via the `if (fn->jit_code) return`
-guard. At REPL startup all already-loaded core library functions are compiled
-eagerly via `jit_compile_all()`.
+Other opcodes (`OP_CONS`, `OP_CAR`, hash ops, string ops) call their
+`vm_jit_*` helpers in `vm.c` directly — no fast path, just a typed call.
 
-### Calling convention
+### Self-recursion fast path
 
-Register-to-register operations are done in `rax`/`rcx`. The register file
-pointer is kept in `rdi` throughout the function. Calls to other functions that
-fall back to the interpreter use `vm_jit_call(fn_id, args, argc)`.
+Direct self-calls (`OP_CALL` where `callee_id == my_fn_id`) bypass the
+`jit_do_call` runtime dispatch: the JIT builds an inline call to the
+function being compiled, stages args into a local regs buffer, and
+pushes/pops a `GCRootFrame` inline. `OP_TAIL_CALL` to self becomes a plain
+branch to `entry_ip`.
 
-### Disabling the JIT
+### GC safepoints
 
-Pass `--no-jit` on the command line to disable JIT compilation entirely. All
-functions run through the interpreter.
+`emit_gc_check` inserts `if (gc_needs_collect) gc_collect();` before
+every allocating op (`CONS`, `HASH_SET`, `STR_CONCAT`), every `CALL` /
+`TAIL_CALL`, and every backward `OP_JMP`.
+
+## FFI Trampolines
+
+The same JIT backend builds per-signature **FFI trampolines** —
+`jit_make_ffi_trampoline` in `jit.c` generates a small native function
+per `(ffi "name" ret-type arg-types…)` form:
+
+```c
+Val tramp(const Val* args) {
+    t0 a0 = unbox(args[0]);   ... tn an = unbox(args[n-1]);
+    rv = ((Trty)fnptr)(a0, ..., an);
+    return box(rv);
+}
+```
+
+libgccjit lowers the typed call according to the host C ABI, which
+replaces what `libffi` did dynamically. Arg/ret conversions for
+`string` and `double` call into small `vm_ffi_*` helpers; int/long/ptr
+use the shared `raw_sext48` / `raw_retag_int` bit-twiddles.
+
+### Symbol resolution
+
+`ffi_lookup` in `ffi_syms.c` first consults a compile-time table of libc
+symbols (`fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …) and
+falls back to `dlsym(RTLD_DEFAULT, name)` for anything else. The table
+means sel programs don't need the binary to be linked with `-rdynamic`
+to reach libc — the addresses are baked in at build time.
 
 ---
 

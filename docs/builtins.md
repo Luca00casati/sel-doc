@@ -427,8 +427,17 @@ Prints `<msg>` to stderr and exits the interpreter with status `1`.
 (ffi <name> <ret-type> <arg-type>...) → callable
 ```
 
-Looks up the C symbol `<name>` in the dynamic linker and returns an FFI
-function value that can be called like a normal closure.
+Resolves the C symbol `<name>` and returns a callable FFI value. Lookup
+is table-first (a compile-time list in `ffi_syms.c` covers common libc
+symbols: `fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …) and
+falls back to `dlsym(RTLD_DEFAULT, name)` for anything else. The returned
+value behaves like a normal closure.
+
+Under the hood, the first `(ffi …)` for a given signature builds a small
+native **trampoline** via libgccjit: it unboxes the `Val` arguments per
+the declared types, issues a typed call to the C function (libgccjit
+lowers it per the host ABI), and boxes the return. Subsequent calls go
+through the trampoline with near-direct call overhead.
 
 Type strings:
 

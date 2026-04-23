@@ -6,9 +6,12 @@ nav_order: 1
 
 # sel
 
-**sel** is a small, Lisp-like language compiled to register-based bytecode and
-executed by an iterative stack VM. The entire implementation — tokenizer, AST,
-compiler, and VM — is written in C with no external runtime dependencies.
+**sel** is a small, Lisp-like language compiled to register-based bytecode
+and executed by an iterative stack VM, with optional JIT compilation via
+libgccjit. The tokenizer, AST, compiler, VM, and FFI trampoline builder
+are written in C; the only external runtime dependency is `libgccjit` for
+the JIT and vendored [linenoise](https://github.com/antirez/linenoise) for
+REPL line editing.
 
 ```lisp
 ; classic recursive Fibonacci (tail-recursive accumulator form)
@@ -34,8 +37,10 @@ compiler, and VM — is written in C with no external runtime dependencies.
 | **Functions** | First-class, lexically-scoped closures |
 | **Macros** | Compile-time `defmacro` with textual substitution |
 | **Tail calls** | Self-tail-call → JMP; general TCO via `OP_TAIL_CALL` |
-| **Standard library** | `core.sel` — precompiled to `core.selc`, loaded at startup |
-| **REPL** | Interactive read-eval-print loop, multi-line aware |
+| **JIT** | Lazy per-function native compile via libgccjit; disable with `--no-jit` |
+| **FFI** | `(ffi "name" ret-type arg-types…)` with JIT-built trampolines; no libffi |
+| **Standard library** | `core.sel` — load explicitly with `(load "core.sel")` |
+| **REPL** | Interactive read-eval-print loop (linenoise), multi-line aware |
 
 ---
 
@@ -50,4 +55,4 @@ compiler, and VM — is written in C with no external runtime dependencies.
 - [Standard Library](docs/stdlib) — `core.sel`: booleans, math, list functions
 - [Closures](docs/closures) — higher-order functions, captures, currying
 - [Tail Calls](docs/tail-calls) — TCO, tail-recursive patterns
-- [Internals](docs/internals) — macro system, core.selc format, compiler passes, VM
+- [Internals](docs/internals) — macro system, compiler passes, VM, JIT, FFI trampoline
