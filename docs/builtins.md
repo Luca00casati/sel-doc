@@ -427,11 +427,12 @@ Prints `<msg>` to stderr and exits the interpreter with status `1`.
 (ffi <name> <ret-type> <arg-type>...) → callable
 ```
 
-Resolves the C symbol `<name>` and returns a callable FFI value. Lookup
-is table-first (a compile-time list in `ffi_syms.c` covers common libc
-symbols: `fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …) and
-falls back to `dlsym(RTLD_DEFAULT, name)` for anything else. The returned
-value behaves like a normal closure.
+Resolves the C symbol `<name>` against the compile-time table in
+`ffi_syms.c` (which covers common libc symbols: `fopen`, `fclose`, `sin`,
+`strlen`, `getchar`, `calloc`, …). There is no dynamic-loader fallback —
+symbols that aren't in the table fail at runtime with `ffi: symbol
+'<name>' not found`. Add new entries and rebuild to expose more C
+functions. The returned value behaves like a normal closure.
 
 Under the hood, the first `(ffi …)` for a given signature builds a small
 native **trampoline** via libgccjit: it unboxes the `Val` arguments per

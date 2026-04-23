@@ -56,7 +56,7 @@ vm.c         ──  Val (result value)
 | `arena.c` / `arena.h` | Bump-pointer arena allocator |
 | `gc.c` / `gc.h` | Mark-sweep GC for heap-allocated values |
 | `jit.c` / `jit.h` | libgccjit-backed JIT + FFI trampoline builder |
-| `ffi_syms.c` / `ffi_syms.h` | Compile-time FFI symbol table (+ dlsym fallback) |
+| `ffi_syms.c` / `ffi_syms.h` | Compile-time FFI symbol table |
 | `linenoise/` | Vendored line-editing library (git submodule) |
 
 ---
@@ -629,11 +629,13 @@ use the shared `raw_sext48` / `raw_retag_int` bit-twiddles.
 
 ### Symbol resolution
 
-`ffi_lookup` in `ffi_syms.c` first consults a compile-time table of libc
-symbols (`fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …) and
-falls back to `dlsym(RTLD_DEFAULT, name)` for anything else. The table
-means sel programs don't need the binary to be linked with `-rdynamic`
-to reach libc — the addresses are baked in at build time.
+`ffi_lookup` in `ffi_syms.c` consults a compile-time table of libc
+symbols (`fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …).
+There is no dynamic-loader fallback — symbols not in the table are
+unreachable from `(ffi …)` and produce `ffi: symbol '<name>' not found`
+at runtime. To expose a new C function, add it to the table and rebuild.
+The trade-off is a static, auditable FFI surface: nothing sel code can
+call at runtime that isn't already linked into the binary.
 
 ---
 
