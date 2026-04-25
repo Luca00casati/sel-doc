@@ -20,12 +20,18 @@ nav_order: 2
 
 Build-time requirements:
 
-- `gcc` (for `libgccjit.h` / `libgccjit.so.0` — ships with GCC itself)
+- `gcc` or `clang`
 - standard C library + `libm`
 - `make`
+- For first-time `libffi` bootstrap: `autoconf`, `automake`, `libtool`,
+  `libtool-bin`, `libltdl-dev`, `pkg-config`, `m4`, `texinfo`
+  (Debian/Ubuntu names; equivalent on other distros).  These are not
+  needed once `libffi/` has been built once.
 
-Clone with submodules (vendored [linenoise](https://github.com/antirez/linenoise)
-lives under `linenoise/`) and run `make`:
+Three submodules are vendored under the repo root: `linenoise/` (REPL
+editing), `mir/` (JIT backend), and `libffi/` (FFI marshalling).  All
+three are built statically and linked into the `sel` binary — no system
+runtime dependencies beyond libc.
 
 ```sh
 git clone --recurse-submodules https://github.com/Luca00casati/sel.git
@@ -33,16 +39,21 @@ cd sel
 make
 ```
 
-If you already cloned without `--recurse-submodules`, initialise the
-submodule first:
+If you already cloned without `--recurse-submodules`:
 
 ```sh
 git submodule update --init
 ```
 
-`make` produces a single `sel` binary. The standard library (`core.sel`)
-is a plain source file — sel loads it on demand via `(load "core.sel")`,
-so the working directory needs access to it.
+`make` produces a single `sel` binary.  The standard library
+(`core.sel`) is a plain source file — sel loads it on demand via
+`(load "core.sel")`, so the working directory needs access to it.
+
+### Optional extras
+
+- `make raylib-binding` regenerates `gen_raylib.sel` from
+  `/usr/include/raylib.h` using `genffi.py`.  Requires `python-clang`
+  (libclang Python bindings) and raylib's dev headers.
 
 ---
 

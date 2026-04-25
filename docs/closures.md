@@ -24,11 +24,11 @@ variables (variables not in the parameter list) are looked up in the captured
 environment.
 
 ```lisp
-(let make-counter
+(let makecounter
   (fn (start)
     (fn () start)))
 
-(let c (make-counter 10))
+(let c (makecounter 10))
 (c)   ; => 10
 ```
 
@@ -90,12 +90,12 @@ Closures can be passed as arguments and returned as values.
 ### Function as Return Value (Currying)
 
 ```lisp
-(let add-n
+(let addn
   (fn (n)
     (fn (x) (+ x n))))
 
-(let add10 (add-n 10))
-(let add20 (add-n 20))
+(let add10 (addn 10))
+(let add20 (addn 20))
 
 (add10 5)    ; => 15
 (add20 5)    ; => 25

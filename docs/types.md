@@ -32,6 +32,7 @@ hold one of the following kinds:
 | **Closure** | A function + captured environment |
 | **Hash map** | Mutable key→value store (string or integer keys) |
 | **FFI function** | Callable wrapper around a C library symbol |
+| **Struct** | Heap buffer holding a C struct's bytes (for FFI by-value) |
 | **Nil** | The zero/empty value |
 
 ---
@@ -143,11 +144,11 @@ A closure is a function value together with a snapshot of the lexical
 environment at the point the `fn` expression was evaluated.
 
 ```lisp
-(let make-adder
+(let makeadder
   (fn (n)
     (fn (x) (+ x n))))    ; inner fn captures n
 
-(let add5 (make-adder 5))
+(let add5 (makeadder 5))
 (add5 3)   ; => 8
 ```
 
@@ -180,25 +181,44 @@ A hash map is a mutable key→value store. Keys must be strings or integers;
 values can be any `Val`. Hash maps are **always truthy**.
 
 ```lisp
-(let h (hash-make))
-(hash-set h "x" 10)
-(hash-set h "y" 20)
-(hash-get h "x")          ; => 10
-(hash-has h "z")          ; => 0
-(hash-keys h)             ; => ("x" . ("y" . 0))  (order unspecified)
-(hash-del h "x")
-(hash-has h "x")          ; => 0
+(let h (hashmake))
+(hashset h "x" 10)
+(hashset h "y" 20)
+(hashget h "x")          ; => 10
+(hashhas? h "z")          ; => 0
+(hashkeys h)             ; => ("x" . ("y" . 0))  (order unspecified)
+(hashdel h "x")
+(hashhas? h "x")          ; => 0
 ```
 
 Hash maps support integer keys too:
 
 ```lisp
-(let counts (hash-make))
-(hash-set counts 42 1)
-(hash-get counts 42)   ; => 1
+(let counts (hashmake))
+(hashset counts 42 1)
+(hashget counts 42)   ; => 1
 ```
 
 See [Built-in Functions](builtins#hash-maps) for the full API.
+
+---
+
+## Structs
+
+A struct is a heap buffer that holds the bytes of a C struct in the
+host's native ABI layout.  It exists so that sel can pass and return C
+structs **by value** through libffi.
+
+```lisp
+(defstruct Color uchar uchar uchar uchar)
+(let c (makestruct "Color" 255 128 64 255))
+(structget c 0)                ; => 255
+(structset c 3 200)            ; mutates in place; returns c
+```
+
+Layouts are registered at compile time with `defstruct` and looked up
+by name.  See [Built-in Functions → Structs](builtins#structs) for the
+full API.  Struct values are **truthy**.
 
 ---
 
@@ -217,9 +237,9 @@ FFI functions are **truthy** values and are first-class: they can be stored in
 variables, passed as arguments, and stored in hash maps.
 
 ```lisp
-(let h (hash-make))
-(hash-set h "puts" (ffi "puts" "int" "string"))
-((hash-get h "puts") "hi")
+(let h (hashmake))
+(hashset h "puts" (ffi "puts" "int" "string"))
+((hashget h "puts") "hi")
 ```
 
 See [Built-in Functions](builtins#ffi) for supported type strings and usage.

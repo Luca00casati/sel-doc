@@ -22,10 +22,7 @@ for contributors and curious users.
 ## Pipeline
 
 ```
-core.selc (precompiled stdlib)
-    │  deserialize on startup
-    ▼
-source text
+source text  (foo.sel; (load "core.sel") loads stdlib on demand)
     │
     ▼
 tokenizer.c  ──  Token (flat array of String + kind + line)
@@ -55,9 +52,11 @@ vm.c         ──  Val (result value)
 | `bigfloat.c` / `bigfloat.h` | Arbitrary-precision float arithmetic |
 | `arena.c` / `arena.h` | Bump-pointer arena allocator |
 | `gc.c` / `gc.h` | Mark-sweep GC for heap-allocated values |
-| `jit.c` / `jit.h` | libgccjit-backed JIT + FFI trampoline builder |
-| `ffi_syms.c` / `ffi_syms.h` | Compile-time FFI symbol table |
+| `jit.c` / `jit.h` | MIR-backed JIT (vendored) |
+| `ffi_syms.c` / `ffi_syms.h` | Compile-time FFI symbol table + `loadlibrary` registry |
 | `linenoise/` | Vendored line-editing library (git submodule) |
+| `mir/` | Vendored MIR JIT backend (git submodule) |
+| `libffi/` | Vendored libffi (git submodule) — handles all FFI marshalling |
 
 ---
 
@@ -67,19 +66,26 @@ Every sel runtime value is a NaN-boxed `uint64_t` (`Val` in `sel_string.h`).
 The top 16 bits select the kind; the lower 48 carry the payload.
 
 ```
-v < 0xFFFC000000000000   →  IEEE 754 double (normal / subnormal / ±inf)
+v < 0xFFF9000000000000   →  IEEE 754 double (normal / subnormal / ±inf)
+bits[63:48] == 0xFFF9    →  StructObj* (lower 48 bits = pointer)
+bits[63:48] == 0xFFFA    →  FfiFunc*   (lower 48 bits = pointer)
+bits[63:48] == 0xFFFB    →  HashMap*   (lower 48 bits = pointer)
 bits[63:48] == 0xFFFC    →  48-bit signed integer (payload sign-extended from bit 47)
-bits[63:48] == 0xFFFD    →  Cons*    (lower 48 bits = pointer)
-bits[63:48] == 0xFFFE    →  Closure* (lower 48 bits = pointer)
-bits[63:48] == 0xFFFF    →  StrObj*  (lower 48 bits = pointer)
+bits[63:48] == 0xFFFD    →  Cons*      (lower 48 bits = pointer)
+bits[63:48] == 0xFFFE    →  Closure*   (lower 48 bits = pointer)
+bits[63:48] == 0xFFFF    →  StrObj*    (lower 48 bits = pointer)
 ```
 
 `VAL_NIL` and `VAL_FALSE` are both `mk_int(0)` — integer zero doubles as the
 nil/false sentinel. `VAL_TRUE` is `mk_int(1)`.
 
-Heap objects (`StrObj`, `Cons`, `Closure`) start with a `GCObj` header for the
-mark-and-sweep GC. `StrObj` covers flat strings, bigfloat decimal strings, and
-lazy rope nodes (two child `Val`s joined on demand).
+All seven heap types (`StructObj`, `FfiFunc`, `HashMap`, `Cons`, `Closure`,
+`StrObj`) start with a `GCObj` header for the mark-and-sweep GC.  `StrObj`
+covers flat strings, bigfloat decimal strings, and lazy rope nodes (two
+child `Val`s joined on demand).  `StructObj` carries an `int type_id` plus
+a flexible `char data[]` buffer holding the raw struct bytes (sized to
+`max(struct_size, sizeof(ffi_arg))` so libffi can write small struct
+returns into it).
 
 ---
 
@@ -198,6 +204,14 @@ All opcodes are in the `OpCode` enum in `vm.h`. Each instruction has:
 | `OP_HASH_DEL` | delete key; `a=map b=key`; `dst = map` |
 | `OP_HASH_KEYS` | `dst = linked list of live keys`; `a=map` |
 
+### Structs
+
+| Opcode | Effect |
+|--------|--------|
+| `OP_MAKE_STRUCT` | alloc StructObj of `struct_id=value`; init each field from `arg_regs` |
+| `OP_STRUCT_GET` | `dst = field at index value`; `a=struct` |
+| `OP_STRUCT_SET` | mutate field; `a=struct, b=value`; `dst=a` (chainable) |
+
 ### Misc
 
 | Opcode | Effect |
@@ -306,41 +320,6 @@ expansion sites.
 
 `not`, `and`, `or`, `when`, `unless`, and all pair accessor macros (`cadr`,
 `list3`, etc.) are defined in `core.sel` rather than in the compiler.
-
----
-
-## `core.selc` — Precompiled Standard Library
-
-At build time, `make` runs `./sel --compile core.sel core.selc`, which:
-
-1. Compiles `core.sel` from source (populating `g_functions[]` and `g_macros[]`).
-2. Serialises both tables to a binary file using the format in `serde.h`.
-
-At startup, `load_core()` reads `core.selc` with `fopen` and deserialises it
-directly into the global tables — no tokenising or compiling happens.
-
-**Binary format** (all integers little-endian):
-
-```
-"SELC"            4-byte magic
-uint32            version (= 2)
-uint32            function count
-[Function] × N    each: name, arity, param names,
-                        free_var_count, free_var_names, Chunk bytecode
-uint32            macro count
-[MacroDef] × M    each: name, arity, param names, body Node tree
-```
-
-Strings are length-prefixed (`uint32` + bytes). Node trees are tagged
-recursively (symbol / number / string-literal / list).
-
-After deserialization, `has_inner_fn` is re-derived by scanning each function's
-bytecode for `OP_MAKE_CLOSURE` (not `OP_STORE_VAR` — anonymous inner functions
-emit no `STORE_VAR` when the enclosing function has no `let` bindings).
-`entry_ip` and `param_regs` are re-derived by `vm_derive_entry_info`.
-
-If `core.selc` is absent or corrupt the interpreter exits with an error.
-Run `./sel --compile core.sel core.selc` to rebuild it.
 
 ---
 
@@ -465,8 +444,9 @@ entire current environment, only the named bindings are snapshotted.
 (let f (fn (x) (+ x c)))   ; captured env = {c: 3} only, not {a b c d e}
 ```
 
-The trimmed list is serialised into `core.selc` so the optimisation applies
-to standard-library closures loaded at startup too.
+The trimmed list is stored on each `Function` so it persists for the
+lifetime of the process — closures defined inside `core.sel` benefit
+from the same optimisation.
 
 ---
 
@@ -527,10 +507,11 @@ feeding directly into `OP_JMP_IF_FALSE` hits the integer fast path.
 ## JIT Compiler
 
 sel's JIT (`jit.c` / `jit.h`) translates bytecode functions to native code
-via **libgccjit** — GCC's backend exposed as a C library. Each compile
-creates a fresh `gcc_jit_context`, builds typed IR, asks gccjit to compile,
-and keeps the resulting `gcc_jit_result*` alive for the function's
-lifetime (it owns the native code).
+via **MIR** — a small portable JIT backend vendored as a git submodule.
+A persistent `MIR_context_t` lives for the life of the process; each
+compile creates a fresh module inside it, generates IR for the function's
+opcodes, asks `MIR_gen` for a native code pointer, and stashes that
+pointer on the `Function` struct.
 
 ### Eligibility
 
@@ -557,9 +538,9 @@ register positions by the caller. The function returns its result as a
 
 ### Heat policy
 
-Compilation is lazy and amortised over many calls, because the gccjit
-compile pipeline (GCC middle/back-end → `as` → `ld` → dlopen) costs
-~30–40 ms per function:
+Compilation is lazy and amortised over many calls.  MIR is fast
+(low-millisecond compile per function), but the threshold is still
+useful to avoid compiling one-off paths:
 
 - `call_count` — incremented on every `OP_CALL` to the function.
 - `loop_count` — incremented on every **backward** `OP_JMP` /
@@ -578,8 +559,9 @@ The JIT handles: `OP_LOAD_CONST`, `OP_MOVE`, `OP_ADD`, `OP_SUB`, `OP_MUL`,
 `OP_LT`, `OP_EQ`, `OP_NOT`, `OP_ADD_IMM`, `OP_SUB_IMM`, `OP_MUL_IMM`,
 `OP_LT_IMM`, `OP_GT_IMM`, `OP_EQ_IMM`, `OP_JMP`, `OP_JMP_IF_FALSE`,
 `OP_CALL`, `OP_TAIL_CALL`, `OP_RET`, `OP_CONS`, `OP_CAR`, `OP_CDR`,
-`OP_HASH_GET`, `OP_HASH_SET`, `OP_STR_CONCAT`. Anything else causes the
-compile attempt to abort and the function stays interpreted.
+`OP_HASH_GET`, `OP_HASH_SET`, `OP_STR_CONCAT`. Anything else (including
+`OP_FFI_PREP` and the struct opcodes) causes the compile attempt to
+abort and the function stays interpreted.
 
 ### Fast and slow paths
 
@@ -608,34 +590,35 @@ branch to `entry_ip`.
 every allocating op (`CONS`, `HASH_SET`, `STR_CONCAT`), every `CALL` /
 `TAIL_CALL`, and every backward `OP_JMP`.
 
-## FFI Trampolines
+## FFI
 
-The same JIT backend builds per-signature **FFI trampolines** —
-`jit_make_ffi_trampoline` in `jit.c` generates a small native function
-per `(ffi "name" ret-type arg-types…)` form:
+`(ffi …)` and the by-value struct pipeline are handled by **libffi**
+(vendored as a git submodule).  `OP_FFI_PREP` builds an `ffi_cif` from
+the type-code list at first use; `vm_ffi_call` marshals each argument
+into a stack-allocated slot (or, for structs, a pointer to the
+`StructObj`'s data buffer), then calls `ffi_call`.  Struct returns are
+written directly into a freshly-allocated `StructObj`'s buffer so no
+intermediate copy is needed.
 
-```c
-Val tramp(const Val* args) {
-    t0 a0 = unbox(args[0]);   ... tn an = unbox(args[n-1]);
-    rv = ((Trty)fnptr)(a0, ..., an);
-    return box(rv);
-}
-```
+This entire pipeline runs in the interpreter; the JIT does not inline
+`(ffi …)` calls.  Marshalling cost is one `ffi_call` per invocation
+plus a tiny per-arg unbox.
 
-libgccjit lowers the typed call according to the host C ABI, which
-replaces what `libffi` did dynamically. Arg/ret conversions for
-`string` and `double` call into small `vm_ffi_*` helpers; int/long/ptr
-use the shared `raw_sext48` / `raw_retag_int` bit-twiddles.
+### Struct support
+
+`defstruct` calls `ffi_register_struct`, which builds an `ffi_type` with
+the right element pointers, calls `ffi_get_struct_offsets` to compute
+per-field byte offsets, and stores everything in a global registry
+(indexed by struct id, packed into the high bits of the FFI type code
+in `OP_FFI_PREP`'s `arg_regs`).  Nested by-value structs work as long
+as the dependency was registered first.
 
 ### Symbol resolution
 
-`ffi_lookup` in `ffi_syms.c` consults a compile-time table of libc
-symbols (`fopen`, `fclose`, `sin`, `strlen`, `getchar`, `calloc`, …).
-There is no dynamic-loader fallback — symbols not in the table are
-unreachable from `(ffi …)` and produce `ffi: symbol '<name>' not found`
-at runtime. To expose a new C function, add it to the table and rebuild.
-The trade-off is a static, auditable FFI surface: nothing sel code can
-call at runtime that isn't already linked into the binary.
+`ffi_lookup` in `ffi_syms.c` consults a compile-time table of common
+libc symbols first, then falls back to `dlsym` on each shared object
+registered by `(loadlibrary "path.so")`.  Libraries are opened with
+`RTLD_NOW | RTLD_LOCAL` and live for the process's lifetime.
 
 ---
 

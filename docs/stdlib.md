@@ -7,9 +7,13 @@ nav_order: 8
 # Standard Library
 {: .no_toc }
 
-The standard library is defined in `core.sel` and precompiled to `core.selc`
-at build time. It is loaded automatically on startup. Use `--no-core` to skip
-it.
+The standard library is defined in `core.sel` and ships as a plain source
+file alongside the `sel` binary.  Load it explicitly when you need its
+functions:
+
+```lisp
+(load "core.sel")
+```
 
 <details open markdown="block">
   <summary>Contents</summary>
@@ -115,8 +119,8 @@ Variadic constructor — takes any number of arguments:
 (foldr f init lst)    ; right fold: f(x0, f(x1, f(x2, init)))
 (map f lst)           ; apply f to each element; return new list
 (filter pred lst)     ; keep elements where pred returns truthy
-(for-each f lst)      ; call f on each element for side effects
-(zip-with f a b)      ; (f a0 b0), (f a1 b1), … while both lists last
+(foreach f lst)      ; call f on each element for side effects
+(zipwith f a b)      ; (f a0 b0), (f a1 b1), … while both lists last
 ```
 
 ```lisp
@@ -137,35 +141,51 @@ Variadic constructor — takes any number of arguments:
 ### Predicates and byte access
 
 ```
-(str-empty? s)          ; 1 if s has byte length 0
+(strempty? s)          ; 1 if s has byte length 0
 ```
 
 ### UTF-8 helpers
 
 ```
-(str-cp-bytes b)        ; byte width of a UTF-8 sequence given its leading byte (1–4)
-(str-decode-at s i)     ; Unicode code point starting at byte index i
-(str-char-len s)        ; number of code points (not bytes) in s
-(str-char-ref s n)      ; code point at character index n  (O(n))
-(str-code-points s)     ; list of all code points in s
+(strcpbytes b)        ; byte width of a UTF-8 sequence given its leading byte (1–4)
+(strdecodeat s i)     ; Unicode code point starting at byte index i
+(strcharlen s)        ; number of code points (not bytes) in s
+(strcharref s n)      ; code point at character index n  (O(n))
+(strcodepoints s)     ; list of all code points in s
 ```
 
 ```lisp
-(str-char-len "café")        ; => 4
-(str-char-ref "café" 3)      ; => 233  (é)
-(str-code-points "hi")       ; => (104 . (105 . 0))
+(strcharlen "café")        ; => 4
+(strcharref "café" 3)      ; => 233  (é)
+(strcodepoints "hi")       ; => (104 . (105 . 0))
 ```
 
 ### Joining and splitting
 
 ```
-(str-join sep lst)      ; concatenate list of strings with separator
-(str-split-nl s)        ; split s on newlines; returns list of non-empty lines
+(strjoin sep lst)      ; concatenate list of strings with separator
+(strsplitnl s)         ; split s on newlines; returns list of non-empty lines
 ```
 
 ```lisp
-(str-join ", " (list "a" "b" "c"))   ; => "a, b, c"
-(str-split-nl "foo\nbar\nbaz")       ; => ("foo" "bar" "baz")
+(strjoin ", " (list "a" "b" "c"))   ; => "a, b, c"
+(strsplitnl "foo\nbar\nbaz")        ; => ("foo" "bar" "baz")
+```
+
+### Building strings
+
+```
+(makestr <part> ...)   ; variadic concat; numbers are auto-stringified
+```
+
+`makestr` is a thin wrapper over `strcc` + `numtostr`.  Strings flow
+through `numtostr` unchanged, so mixed string/number arguments compose
+without explicit conversions.
+
+```lisp
+(makestr "fps: " 60 " (" 16.7 "ms)")   ; => "fps: 60 (16.7ms)"
+(makestr "x=" x ", y=" y)
+(makestr)                               ; => ""
 ```
 
 ---
@@ -187,13 +207,13 @@ I/O functions are implemented in `core.sel` using the FFI layer.
 ```
 
 ```
-(read-line)        ; read all of stdin; return list of lines (strings)
+(readline)        ; read all of stdin; return list of lines (strings)
 (read fp)          ; read entire file fp; return list of lines
 ```
 
 ```lisp
-(let lines (read-line))           ; block until EOF on stdin
-(for-each println lines)
+(let lines (readline))           ; block until EOF on stdin
+(foreach println lines)
 
 (let fp (open "/etc/hostname" "r"))
 (let lines (read fp))

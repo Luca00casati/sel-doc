@@ -36,14 +36,14 @@ A collection of sel programs demonstrating common patterns.
 ### Naive recursive (for illustration)
 
 ```lisp
-(let fib-naive
-  (fn fib-naive (n)
+(let fibnaive
+  (fn fibnaive (n)
     (if (< n 2)
       n
-      (+ (fib-naive (- n 1))
-         (fib-naive (- n 2))))))
+      (+ (fibnaive (- n 1))
+         (fibnaive (- n 2))))))
 
-(fib-naive 20)   ; 6765  (slow for large n)
+(fibnaive 20)   ; 6765  (slow for large n)
 ```
 
 ---
@@ -103,10 +103,10 @@ A collection of sel programs demonstrating common patterns.
   (filter (fn (x) (= (% x 2) 0))
           (iota 10 nil)))
 
-(let sum-sq
+(let sumsq
   (fold (fn (acc x) (+ acc (* x x))) 0 evens))
 
-(println sum-sq)   ; 220  (4+16+36+64+100)
+(println sumsq)   ; 220  (4+16+36+64+100)
 ```
 
 ---
@@ -121,11 +121,11 @@ A collection of sel programs demonstrating common patterns.
 (let double  (fn (x) (* x 2)))
 (let inc     (fn (x) (+ x 1)))
 
-(let double-then-inc (compose inc double))
-(double-then-inc 5)   ; => 11
+(let doublethen (compose inc double))
+(doublethen 5)   ; => 11
 
-(let inc-then-double (compose double inc))
-(inc-then-double 5)   ; => 12
+(let incthen (compose double inc))
+(incthen 5)   ; => 12
 ```
 
 ---

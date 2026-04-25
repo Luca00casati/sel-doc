@@ -143,3 +143,78 @@ hygiene — parameter names may shadow outer bindings.
 ```
 
 n-ary `and` / `or` compose by nesting: `(and a (and b c))`.
+
+---
+
+## `defconst` — compile-time constant
+
+```
+(defconst <name> <expr>)
+```
+
+Registers `<expr>` as the compile-time substitution for `<name>`.  Each
+later reference to the bare symbol `<name>` re-expands the AST in place,
+which means subsequent passes (constant folding, immediate-operand
+folding) can collapse the whole thing to a literal.
+
+```lisp
+(defconst PI       3.14159265358979)
+(defconst RAYWHITE (makestruct "Color" 245 245 245 255))
+
+(println PI)              ; folds to LOAD_CONST 3.14159…
+(ClearBackground RAYWHITE) ; expands to a fresh makestruct each call
+```
+
+**Caveat:** because each reference re-expands the body, `defconst` of an
+allocating expression (like `makestruct`) creates a fresh value every
+time.  For shared/mutable bindings, use `let` instead.
+
+Local `let` bindings shadow `defconst` names in their scope.
+
+---
+
+## `defstruct` — register a C struct layout
+
+```
+(defstruct <name> <member-type> ...)
+```
+
+Registers a C struct layout with libffi so it can be passed by value
+through `(ffi …)`.  Member types are the same set as `(ffi …)` accepts,
+plus the names of previously-registered structs (for nested by-value
+members).  See [Built-in Functions → Structs](builtins#structs).
+
+```lisp
+(defstruct Color uchar uchar uchar uchar)
+(defstruct Vector2 float float)
+(defstruct Camera2D Vector2 Vector2 float float)
+```
+
+---
+
+## `loadlibrary` — dynamic FFI registration
+
+```
+(loadlibrary <path-string>)
+```
+
+Compile-time `dlopen` of a shared object plus registration with the FFI
+symbol resolver.  After this form, `(ffi "sym" …)` for any symbol in
+the loaded library succeeds.  See [Built-in Functions → loadlibrary](builtins#loadlibrary).
+
+```lisp
+(loadlibrary "libraylib.so")
+(let CloseWindow (ffi "CloseWindow" "void"))
+```
+
+---
+
+## `ffi` — declare a C function
+
+```
+(ffi <name> <ret-type> <arg-type>...)
+```
+
+Looks up the C symbol `<name>` and returns a callable wrapping it.
+Detailed type table and examples in
+[Built-in Functions → ffi](builtins#ffi).
